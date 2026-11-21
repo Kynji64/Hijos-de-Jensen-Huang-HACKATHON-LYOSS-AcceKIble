@@ -775,7 +775,7 @@ if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); 
 /** Texto pensado para oír: sin emojis ni abreviaturas. */
 const speakable = t => t
   .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
-  .replace(/\bAv\.\s/g, 'Avenida ').replace(/(\d+) m\b/g, '$1 metros').replace(/≈/g, 'aproximadamente ')
+  .replace(/\bAv\.\s/g, 'Avenida ').replace(/\bDep\.\s(?=(Humanístico|Comercial)\b)/g, 'Departamento ').replace(/\bDep\.\s/g, 'Departamento de ').replace(/(\d+) m\b/g, '$1 metros').replace(/≈/g, 'aproximadamente ')
   .replace(/(\d+)x(\d+)/g, '$1 por $2').replace(/\s[·–]\s/g, ', ').replace(/\s*\(\s*/g, ', ').replace(/\s*\)/g, '')
   .replace(/\s*,\s*([,.])/g, '$1').replace(/\s+/g, ' ').trim();
 /** Habla una lista de frases (cada una en su propio enunciado: evita cortes en textos largos). */
