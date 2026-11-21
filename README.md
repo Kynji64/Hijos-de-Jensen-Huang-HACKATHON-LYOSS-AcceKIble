@@ -59,6 +59,14 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 - Cada arista del grafo trae `hasStairs: true | false` (las calles internas y las rampas `type: 'r'` son `false`). `computeRoute(G, lugar, tótem, true)` ya bloquea las aristas con `hasStairs` y las calles exteriores (salvo destinos fuera del recinto).
 - `window.campus.setStairMarkers(true)` muestra un ícono 🪜 sobre cada escalera (pensado para la vista de accesibilidad).
 
+## Guía por voz (visión reducida)
+
+- Botón **🔊 Voz** en la barra derecha (bajo *A+ Texto*): usa la Web Speech API del navegador (`speechSynthesis`, voz en español, `rate 0.95`), sin servicios externos.
+- Con la guía activa se anuncia el tótem actual, el lugar tocado en el mapa (nombre, descripción y referencia), cada ruta trazada o recalculada (distancia, tiempo, escaleras y pasos numerados con dirección y giros) y los cambios de tótem.
+- Tocarlo mientras habla detiene la locución; tocarlo en silencio desactiva la guía. Se apaga sola por inactividad.
+- **🔁 Repetir** en la tarjeta de ruta vuelve a leer el recorrido (aunque la guía esté apagada).
+- Para el equipo: `window.campus.voice.speak(texto)` y `window.campus.voice.announceAccessible(true|false)` (confirmación por voz de la ruta accesible).
+
 ## Licencia
 
 Distribuido bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.

@@ -762,6 +762,68 @@ function fitPoints(pts) {
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove('show'), 2400); }
 const totemById = id => C.TOTEMS.find(x => x.id === id);
 
+/* ---------- Guía por voz (Web Speech API nativa, sin servicios externos) ---------- */
+const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+const voice = { on: false, es: null, token: 0 };
+function pickVoice() {
+  if (!synth) return;
+  const vs = synth.getVoices();
+  voice.es = vs.find(v => /^es[-_]CL/i.test(v.lang)) || vs.find(v => /^es[-_](419|US|MX|AR|CO|PE)/i.test(v.lang))
+          || vs.find(v => /^es[-_]ES/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null;
+}
+if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); }
+/** Texto pensado para oír: sin emojis ni abreviaturas. */
+const speakable = t => t
+  .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
+  .replace(/\bAv\.\s/g, 'Avenida ').replace(/(\d+) m\b/g, '$1 metros').replace(/≈/g, 'aproximadamente ')
+  .replace(/(\d+)x(\d+)/g, '$1 por $2').replace(/\s[·–]\s/g, ', ').replace(/\s*\(\s*/g, ', ').replace(/\s*\)/g, '')
+  .replace(/\s*,\s*([,.])/g, '$1').replace(/\s+/g, ' ').trim();
+/** Habla una lista de frases (cada una en su propio enunciado: evita cortes en textos largos). */
+function speak(parts, force = false) {
+  if (!synth || (!voice.on && !force)) return;
+  synth.cancel();
+  const token = ++voice.token, list = (Array.isArray(parts) ? parts : [parts]).map(speakable).filter(Boolean);
+  list.forEach((txt, i) => {
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = voice.es?.lang || 'es-CL'; if (voice.es) u.voice = voice.es; u.rate = 0.95;
+    u.onstart = () => { if (token === voice.token) setSpeaking(true); };
+    u.onend = u.onerror = () => { if (token === voice.token && i === list.length - 1) setSpeaking(false); };
+    synth.speak(u);
+  });
+}
+function setSpeaking(on) { $('voiceBtn').classList.toggle('speaking', !!on && voice.on); }
+function routeSpeech(route, prefix) {
+  const p = placeObjs[route.placeId].place, parts = [];
+  if (prefix) parts.push(prefix);
+  parts.push(`Ruta hacia ${p.name}${p.sub ? ', ' + p.sub : ''}.`);
+  if (route.accessible) parts.push('Ruta accesible activada, sin escaleras.');
+  parts.push(`Distancia: ${Math.round(route.meters)} metros. Tiempo estimado de caminata: ${route.minutes} minuto${route.minutes > 1 ? 's' : ''}.`);
+  parts.push(route.stairs ? `La ruta incluye ${route.stairs} escalera${route.stairs > 1 ? 's' : ''}.` : 'Ruta libre de escaleras.');
+  if (route.external) parts.push('Incluye un tramo por una calle exterior, fuera de las rejas.');
+  route.steps.slice(1).forEach((st, i) => parts.push(`Paso ${i + 1}: ${st.text}`));
+  return parts;
+}
+function placeSpeech(p) {
+  return [`${p.name}${p.sub ? ', ' + p.sub : ''}.`, p.desc, 'Toca Cómo llegar aquí para escuchar la ruta.'];
+}
+function setVoice(on) {
+  if (on && !synth) { toast('La voz no está disponible en este dispositivo'); return; }
+  voice.on = on;
+  $('voiceBtn').classList.toggle('on', on);
+  $('voiceBtn').setAttribute('aria-pressed', String(on));
+  $('voiceBtn').setAttribute('aria-label', on ? 'Desactivar guía por voz' : 'Activar guía por voz para accesibilidad');
+  if (on) {
+    const t = totemById(state.origin);
+    speak(['Guía por voz activada.', `Estás ubicado en el Tótem ${t.n}, ${t.name}.`,
+      state.route ? 'Tienes una ruta activa. Toca Repetir para escucharla de nuevo.' : 'Selecciona un destino o toca un edificio para escuchar cómo llegar.']);
+  } else { synth?.cancel(); voice.token++; setSpeaking(false); toast('Guía por voz desactivada'); }
+}
+$('voiceBtn').addEventListener('click', () => {
+  // tocar mientras habla: detiene la locución (la guía sigue activa); tocar en silencio: desactiva la guía
+  if (voice.on && synth?.speaking) { synth.cancel(); voice.token++; setSpeaking(false); toast('Locución detenida · toca de nuevo para desactivar la voz'); return; }
+  setVoice(!voice.on);
+});
+
 /* ---------- Origen ---------- */
 function setOrigin(id, silent) {
   state.origin = id;
@@ -774,8 +836,9 @@ function setOrigin(id, silent) {
     o.label.element.textContent = here ? `📍 ESTÁS AQUÍ · T${tt.n}` : `T${tt.n} · ${tt.short}`;
     o.ring.material.opacity = here ? 0.8 : 0;
   }
-  if (state.route) routeTo(state.route.placeId);
-  else if (!silent) { flyToPoint(nodePos(id), 120); toast(`Origen: Tótem ${t.n} · ${t.name}`); }
+  const said = `Origen cambiado. Ahora estás en el Tótem ${t.n}, ${t.name}.`;
+  if (state.route) routeTo(state.route.placeId, { prefix: silent ? '' : said });
+  else if (!silent) { flyToPoint(nodePos(id), 120); toast(`Origen: Tótem ${t.n} · ${t.name}`); speak(said); }
 }
 $('totemBtns').innerHTML = C.TOTEMS.map(t => {
   const lv = LV[G.nodes[t.id].level];
@@ -845,7 +908,7 @@ function selectPlace(id, fly = true) {
   $('infoCard').classList.remove('hidden');
   document.querySelectorAll('.letters button').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
   renderList();
-  if (fly) flyToPoint(o.center.clone().setY(o.top * 0.5), 100);
+  if (fly) { flyToPoint(o.center.clone().setY(o.top * 0.5), 100); speak(placeSpeech(p)); }
 }
 function closeCard() {
   if (state.selected) setHighlight(state.selected, false);
@@ -860,7 +923,7 @@ $('icFocus').addEventListener('click', () => { const o = placeObjs[state.selecte
 $('icTour').addEventListener('click', () => openTour(state.selected));
 
 /* ---------- Ruta ---------- */
-function routeTo(placeId) {
+function routeTo(placeId, opts = {}) {
   const place = placeObjs[placeId].place;
   const route = computeRoute(G, place, state.origin, false);
   if (!route) { toast('No se encontró una ruta disponible'); return; }
@@ -887,6 +950,7 @@ function routeTo(placeId) {
   }
   route.steps = buildSteps(G, C, route);
   $('rcList').innerHTML = route.steps.map(s => `<li class="${s.cls || ''}"><i>${s.icon}</i><span>${s.text}</span></li>`).join('');
+  speak(routeSpeech(route, opts.prefix));
   $('routeCard').classList.remove('hidden');
   $('infoCard').classList.add('hidden');
   if (innerWidth < 860) document.body.classList.add('collapsed');
@@ -905,13 +969,8 @@ $('rcSteps').addEventListener('click', () => {
 });
 $('rcTour').addEventListener('click', () => state.route && openTour(state.route.placeId));
 $('rcSpeak').addEventListener('click', () => {
-  if (!('speechSynthesis' in window) || !state.route) return toast('Voz no disponible en este dispositivo');
-  speechSynthesis.cancel();
-  const r = state.route, p = placeObjs[r.placeId].place;
-  const u = new SpeechSynthesisUtterance(`Ruta hacia ${p.name}. ${Math.round(r.meters)} metros, unos ${r.minutes} minutos. ` + r.steps.map(s => s.text).join(' '));
-  u.lang = 'es-CL'; u.rate = 0.95;
-  const v = speechSynthesis.getVoices().find(v => v.lang?.startsWith('es')); if (v) u.voice = v;
-  speechSynthesis.speak(u);
+  if (!synth) return toast('Voz no disponible en este dispositivo');
+  if (state.route) speak(routeSpeech(state.route), true);
 });
 
 /* ---------- Tour 360° USM ---------- */
@@ -968,6 +1027,7 @@ function resetIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     clearRoute(); closeCard(); $('tourModal').classList.add('hidden'); $('search').value = ''; renderList();
+    if (voice.on) setVoice(false);
     flyTo(HOME.target, HOME.position, 1.6);
     controls.autoRotate = true; $('autoRot').classList.add('on');
   }, IDLE_RESET_MS);
@@ -1024,4 +1084,6 @@ resetIdle();
 animate();
 // depuración: window.campus.view(target, position) dibuja un cuadro aunque la pestaña esté en segundo plano
 window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour, setStairMarkers, stairMarkers,
+  voice: { setVoice, speak, isOn: () => voice.on,
+    announceAccessible: on => speak(on ? 'Ruta accesible activada. Las rutas evitarán escaleras.' : 'Ruta accesible desactivada.') },
   view(t, p) { if (t) controls.target.set(...t); if (p) camera.position.set(...p); tween.active = false; controls.update(); renderer.render(scene, camera); labelRenderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.8); } };
