@@ -126,7 +126,7 @@ const PATHS = [
   { pts: [[1673,310],[1662,380]] },
   { name: 'la rampa del Edificio M', type: 'r', pts: [[1728,300],[1700,330],[1662,380],[1656,428]] },
   { pts: [[1806,368],[1792,384]] },
-  // Edificio C (Talleres) y cadena J · Q · K · O · N junto a Subida San Luis
+  // Edificio C (Talleres) y cadena J · Q · K · N junto a Subida San Luis
   { pts: [[1183,662],[1181,628]] },
   { pts: [[940,864],[915,875]] },
   { pts: [[1254,840],[1258,852]] },
@@ -136,17 +136,15 @@ const PATHS = [
   { pts: [[821,794],[821,768]] },
   { pts: [[868,820],[885,818]] },
   { pts: [[799,845],[791,845]] },
-  { pts: [[683,677],[690,683]] },
-  { pts: [[741,654],[754,654]] },
   { pts: [[714,539],[714,566]] },
-  { pts: ['T2', [790,772]] },
+  { name: 'la portería de Subida San Luis', pts: ['T2', [989,955]] },
+  { pts: ['T2', [944,992]] },
   { name: 'el pasaje oriente de Talleres', pts: [[1515,503],[1548,600],[1545,700],[1526,738]] },
-  // Tótem 3: Sansanito, R, R2, Cancha Multiuso, Quezada Acharán
+  // Tótem 3: Sansanito, R, Cancha Multiuso, Quezada Acharán
   { pts: ['T3', [1690,428]] },
   { pts: ['T3', [1655,571]] },
   { pts: ['T3', [1729,577]] },
   { pts: ['T3', [1747,526]] },
-  { pts: [[1656,541],[1670,538]] },
   // Fuera del recinto: P1-P2 y Edificio Matta (cruzando Av. Los Placeres)
   { name: 'el cruce de Av. Los Placeres', pts: [[1322,908],[1318,874]] },
   { pts: [[1898,849],[1925,849]] },
@@ -155,7 +153,7 @@ const PATHS = [
 /* ---------- Tótems ---------- */
 const TOTEMS = [
   { id:'T1', n:1, name:'Acceso Av. España',  short:'Av. España',  at:[862,40] },
-  { id:'T2', n:2, name:'Subida San Luis',    short:'San Luis',    at:[768,752] },
+  { id:'T2', n:2, name:'Subida San Luis',    short:'San Luis',    at:[976,972] },
   { id:'T3', n:3, name:'Sector M – R',       short:'Sector M–R',  at:[1690,500] },
 ];
 
@@ -205,10 +203,10 @@ const PLACES = [
     desc:'Portería del Acceso Av. España, al pie de la escalinata que sube a la plaza del Edificio A. Junto al Tótem 1.' },
   { id:'J', name:'Edificio J', cat:'moderno', style:'modern',
     px:952, py:972, w:16, d:24, h:4, entries:[[962,962]],
-    desc:'Edificio angosto en la esquina de Subida San Luis con Av. Los Placeres, al inicio de Calle Talleres.' },
+    desc:'Edificio angosto en la esquina de Subida San Luis con Av. Los Placeres, al inicio de Calle Talleres, junto a la portería y al Tótem 2.' },
   { id:'K', name:'Edificio K', sub:'CIAC', cat:'moderno', style:'modern',
     px:835, py:830, w:60, d:60, h:6, entries:[[821,794],[868,820],[799,845]],
-    desc:'CIAC · Centro Integrado de Aprendizaje en Ciencias Básicas. En el borde de Subida San Luis, entre los edificios Q y O, junto a Calle Quezada Acharán y a pasos del Tótem 2.' },
+    desc:'CIAC · Centro Integrado de Aprendizaje en Ciencias Básicas. En el borde de Subida San Luis, junto al Edificio Q y a Calle Quezada Acharán.' },
   { id:'L', name:'Edificio L', cat:'moderno', style:'modern',
     px:1275, py:330, w:30, d:140, h:4, entries:[[1252,340]],
     desc:'Pabellón alargado en el borde de la Cancha de Fútbol, frente a Calle Carlos Edwards.' },
@@ -225,9 +223,6 @@ const PLACES = [
   { id:'N', name:'Edificio N', cat:'moderno', style:'modern', rot:23,
     px:728, py:598, w:18, d:18, h:3, entries:[[742,597]],
     desc:'Pequeño edificio en el empalme de Calle Carlos Van Buren con Subida San Luis.' },
-  { id:'O', name:'Edificio O', cat:'moderno', style:'modern',
-    px:712, py:665, w:25, d:50, h:4, entries:[[683,677],[741,654]],
-    desc:'Edificio angosto junto a Subida San Luis, entre el Edificio K y el Edificio N.' },
   { id:'P', name:'Edificio P', sub:'P1 · P2', cat:'moderno', style:'parts', outside:true,
     px:1355, py:990, w:140, d:200, h:7, entries:[[1322,908]],
     parts:[[-45,-82,45,-12,7],[45,-82,72,-45,5],[-35,-12,32,60,8],[-62,88,32,106,3]],
@@ -237,10 +232,7 @@ const PLACES = [
     desc:'Pequeño edificio junto a Subida San Luis, entre el Edificio J y el Edificio K - CIAC.' },
   { id:'R', name:'Edificio R', cat:'moderno', style:'mrt',
     px:1745, py:618, w:70, d:70, h:7, entries:[[1729,577]],
-    desc:'Bloque moderno junto a Av. Los Placeres (mismo lenguaje que M y T), al lado de la Cancha Multiuso, el Sansanito y el Edificio R2.' },
-  { id:'R2', name:'Edificio R2', cat:'moderno', style:'modern',
-    px:1638, py:545, w:30, d:26, h:3, entries:[[1656,541]],
-    desc:'Módulo anexo del Edificio R, junto al Sansanito y el Tótem 3.' },
+    desc:'Bloque moderno junto a Av. Los Placeres (mismo lenguaje que M y T), al lado de la Cancha Multiuso y el Sansanito.' },
   { id:'SAN', name:'Sansanito', icon:'✚', cat:'servicios', style:'kiosk',
     px:1668, py:605, w:60, d:55, h:3, entries:[[1655,571]],
     desc:'Sansanito: punto de atención entre el Edificio R, la Cancha Multiuso y Av. Los Placeres, a pasos del Tótem 3.' },

@@ -607,21 +607,46 @@ for (const d of C.DECOR) buildVolume(d, null);
     }
   }
   // manzanas vecinas (volúmenes neutros alineados a la trama, sobre el cerro)
-  // contexto urbano: volúmenes grises neutros (low-poly) en las manzanas de los cerros
-  const houses = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { flatShading: true }), 1400);
-  let hn = 0;
-  const footprints = [...C.PLACES, ...C.DECOR].map(p => geo.rectPoly(p.px, p.py, p.w + 30, p.d + 30, p.rot));
-  for (let gx = -420; gx < 2500 && hn < 1400; gx += 15) for (let gy = -450; gy < 1500 && hn < 1400; gy += 15) {
-    const [x, y] = geo.local(1000, 480, gx - 1000, gy - 480, C.ROT);
-    if (rnd() < 0.3 || TER.sAt(x, y) < 0 || geo.inPoly(x, y, C.OUTLINE) || footprints.some(f => geo.inPoly(x, y, f))) continue;
-    if (roadLines.some(l => geo.polyDist(l.pts, x, y) < l.r + 4)) continue;
-    const v = toWorld(x, y); if (Math.abs(v.x) > 300 || Math.abs(v.y) > 210) continue;
-    const hgt = 1.4 + rnd() * 4.5 + (rnd() < 0.08 ? 5 + rnd() * 6 : 0), base = H(x, y);
-    d.position.set(v.x, base + hgt / 2 - 0.5, v.y); d.rotation.set(0, 0, 0); d.scale.set(12 * S * (0.7 + rnd() * 0.3), hgt + 1, 12 * S * (0.7 + rnd() * 0.3)); d.updateMatrix();
-    houses.setColorAt(hn, new THREE.Color().setHSL(0.6, 0.03 + rnd() * 0.04, 0.72 + rnd() * 0.12));
-    houses.setMatrixAt(hn++, d.matrix);
+  // contexto urbano: barrio de casas bajas (1–3 pisos, grises suaves) repartido por todo el cerro.
+  // Grilla alineada a la trama, manzanas separadas por pasajes; libres las calles y el perímetro del campus.
+  const MAXH = 5000, CELL = 5.4;
+  const walls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat(0xffffff, { flatShading: true }), MAXH);
+  const roofGeo = (() => {
+    const sh = new THREE.Shape([new THREE.Vector2(-0.5, 0), new THREE.Vector2(0.5, 0), new THREE.Vector2(0, 1)]);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 1, bevelEnabled: false }); g.translate(0, 0, -0.5); return g;
+  })();
+  const roofs = new THREE.InstancedMesh(roofGeo, mat(0xffffff, { flatShading: true }), MAXH);
+  const footprints = [...C.PLACES, ...C.DECOR].map(p => geo.rectPoly(p.px, p.py, p.w + 40, p.d + 40, p.rot));
+  const ring = [...C.OUTLINE, C.OUTLINE[0]];
+  let hn = 0, rn = 0;
+  for (let i = 0, x = -292; x < 320; x += CELL, i++) for (let j = 0, z = -205; z < 226; z += CELL, j++) {
+    if (hn >= MAXH) break;
+    if (i % 6 === 5 || j % 4 === 3) continue;                 // pasajes entre manzanas
+    if (rnd() < 0.12) continue;                               // sitios eriazos y patios
+    const cx = x + (rnd() - 0.5) * 0.8, cz = z + (rnd() - 0.5) * 0.8;
+    const [px, py] = toImage(cx, cz);
+    if (TER.sAt(px, py) < 0) continue;                                         // borde costero / mar
+    if (geo.inPoly(px, py, C.OUTLINE) || geo.polyDist(ring, px, py) < 18) continue;   // dentro o pegado a la reja
+    if (footprints.some(f => geo.inPoly(px, py, f))) continue;                 // P, Matta…
+    if (roadLines.some(l => geo.polyDist(l.pts, px, py) < l.r + 8)) continue;  // calles y veredas libres
+    const w = CELL * (0.6 + rnd() * 0.28), dd = CELL * (0.6 + rnd() * 0.28);
+    const floors = rnd() < 0.5 ? 1 : rnd() < 0.7 ? 2 : 3, hgt = floors * 1.35;
+    const hs = [[-w / 2, -dd / 2], [w / 2, -dd / 2], [w / 2, dd / 2], [-w / 2, dd / 2]].map(([ox, oz]) => H(...toImage(cx + ox, cz + oz)));
+    const bottom = Math.min(...hs) - 0.4, top = Math.max(...hs) + hgt;           // en pendiente la casa se escalona
+    d.position.set(cx, (bottom + top) / 2, cz); d.rotation.set(0, 0, 0); d.scale.set(w, top - bottom, dd); d.updateMatrix();
+    walls.setMatrixAt(hn, d.matrix);
+    walls.setColorAt(hn++, new THREE.Color().setHSL(0.58, 0.02 + rnd() * 0.04, 0.72 + rnd() * 0.12));
+    if (floors < 3) {                                          // techo a dos aguas (los bloques de 3 pisos van planos)
+      const along = w >= dd;
+      d.position.set(cx, top, cz); d.rotation.set(0, along ? Math.PI / 2 : 0, 0);
+      d.scale.set((along ? dd : w) * 1.08, Math.min(w, dd) * 0.32, (along ? w : dd) * 1.04); d.updateMatrix();
+      roofs.setMatrixAt(rn, d.matrix);
+      roofs.setColorAt(rn++, new THREE.Color().setHSL(0.6, 0.03 + rnd() * 0.03, 0.46 + rnd() * 0.12));
+    }
   }
-  houses.count = hn; houses.castShadow = houses.receiveShadow = true;
+  walls.count = hn; roofs.count = rn;
+  walls.castShadow = walls.receiveShadow = roofs.castShadow = roofs.receiveShadow = true;
+  const houses = new THREE.Group(); houses.add(walls, roofs);
   crown.count = trunk.count = n; scene.add(crown, trunk, houses);
 }
 // Rótulos urbanos

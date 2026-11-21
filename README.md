@@ -33,7 +33,7 @@ Luego abre en el navegador: http://localhost:8765
 
 - `?totem=T1|T2|T3` — fija el tótem de origen (`T1`: Av. España, `T2`: San Luis, `T3`: Sector M–R)
 - `?acc=1` — activa la **Ruta accesible** (sin escaleras y solo por la red interna del recinto)
-- `?dest=C` — abre directamente la ruta hacia un destino (`A`, `B`, `C`, `D`, `E`, `F`, `F2`, `H`, `I`, `J`, `K`, `L`, `M`, `M2`, `MAT`, `N`, `O`, `P`, `Q`, `R`, `R2`, `T`, `U`, `SAN`, `PIS`, `PC`, `PCA`, `CM`, `C11`, `TEN`)
+- `?dest=C` — abre directamente la ruta hacia un destino (`A`, `B`, `C`, `D`, `E`, `F`, `F2`, `H`, `I`, `J`, `K`, `L`, `M`, `M2`, `MAT`, `N`, `P`, `Q`, `R`, `T`, `U`, `SAN`, `PIS`, `PC`, `PCA`, `CM`, `C11`, `TEN`)
 
 ## Editar datos del campus
 
