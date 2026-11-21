@@ -140,8 +140,10 @@ const PATHS = [
   { name: 'la rampa de acceso al casco', type: 'r', pts: [[1185,372],[1110,420],[1038,434]] },
   { name: 'las escaleras hacia la Cancha de Fútbol', type: 's', width: 3, pts: [[1213,606],[1195,530],[1173,500]] },
   { name: 'las escaleras hacia la Cancha de Fútbol', type: 's', width: 3.2, pts: [[1300,480],[1350,555]] },
-  { pts: [[1049,661],[1050,681]] },
-  { pts: [[848,631],[757,640]] },
+  // Accesos norte y poniente del Edificio B (Quezada Acharán y Carlos Edwards)
+  { name: 'el acceso norte-poniente del Edificio B', pts: [[971,683],[976,712]] },
+  { name: 'el acceso norte-oriente del Edificio B', pts: [[1120,623],[1125,650]] },
+  { name: 'el acceso poniente del Edificio B', pts: [[850,628],[757,640]] },
   // Cancha CED, Edificio L, Gimnasio 2 y Edificio M
   { pts: [[1252,340],[1185,345]] },
   { name: 'el entorno de la Cancha CED', pts: [[1150,290],[1235,248],[1283,252]] },
@@ -192,7 +194,7 @@ const PLACES = [
     tour:['Frontis Aula Magna','Aula Magna','Edificio A'],
     desc:'Edificio emblemático del casco histórico neogótico, con la Torre del Reloj y el Aula Magna. Su fachada da a la plaza de Calle Agustín Edwards, sobre la escalinata que baja al Acceso Av. España; al sur está el Patio Central.' },
   { id:'B', name:'Edificio B', sub:'Dep. Electrónica · Piscina', cat:'historico', style:'gothic-court',
-    px:1010, py:565, w:330, d:190, h:6, entries:[[970,468],[1038,434],[1049,661],[848,631],[1173,500]],
+    px:1010, py:565, w:330, d:190, h:6, entries:[[970,468],[850,628],[971,683],[1120,623]],
     tour:['Edificio B','Edificio B - Química','Patio Interior'],
     desc:'Claustro histórico entre Calle Quezada Acharán y el Patio Central. En su patio interior está la Piscina Universitaria.' },
   { id:'PIS', name:'Piscina Universitaria', icon:'🏊', cat:'deportivo', style:'pool',
