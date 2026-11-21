@@ -67,6 +67,12 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 - **🔁 Repetir** en la tarjeta de ruta vuelve a leer el recorrido (aunque la guía esté apagada).
 - Para el equipo: `window.campus.voice.speak(texto)` y `window.campus.voice.announceAccessible(true|false)` (confirmación por voz de la ruta accesible).
 
+## Modo alto contraste (baja visión)
+
+- Botón **◐ Contraste** en la barra derecha (bajo *Voz*). Activo: amarillo `#FFFF00` con texto negro y borde grueso; `aria-pressed` y `aria-label` cambian con el estado. Si la guía por voz está activa, anuncia el cambio.
+- Interfaz (`body.high-contrast` en `css/styles.css`): fondos negros, bordes de 2–3 px amarillo/blanco, texto blanco, seleccionados invertidos y foco cian, sin sombras.
+- Escena 3D (`setHighContrast` en `js/main.js`): cielo y terreno negro mate, casas y árboles atenuados, edificios del campus en blanco con techos grises y aristas negras, calles internas claras con borde amarillo, escaleras en naranja/rojo y ruta en amarillo eléctrico más gruesa. Al desactivarlo se restauran los materiales originales. Se apaga solo por inactividad.
+
 ## Licencia
 
 Distribuido bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.
