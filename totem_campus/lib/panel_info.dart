@@ -72,7 +72,8 @@ const contactos = [
 // ─────────────────────────────────────────────────────────────
 
 class PanelInfo extends StatelessWidget {
-  const PanelInfo({super.key});
+  final bool modoAccesible;
+  const PanelInfo({super.key, this.modoAccesible = false});
 
   @override
   Widget build(BuildContext context) {

@@ -5,6 +5,13 @@ import 'package:web/web.dart' as web;
 
 import 'panel_info.dart';
 
+// ─────────────────────────────────────────────────────────────
+// Rutas de los dos mapas (dentro de la carpeta web/).
+// Cuando sus compañeros entreguen los mapas, solo cambien estas dos líneas.
+// ─────────────────────────────────────────────────────────────
+const String rutaMapaGeneral = 'mapa/index.html';
+const String rutaMapaAccesible = 'mapa_accesible/index.html';
+
 void main() {
   runApp(const TotemApp());
 }
@@ -38,6 +45,15 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   static const double _anchoMin = 280;
   static const double _anchoMax = 600;
 
+  // Modo del mapa: false = general, true = movilidad reducida
+  bool _modoAccesible = false;
+
+  void _cambiarModo(bool accesible) {
+    if (accesible == _modoAccesible) return;
+    setState(() => _modoAccesible = accesible);
+    Mapa3D.cargar(accesible ? rutaMapaAccesible : rutaMapaGeneral);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -53,7 +69,13 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xFFC7D1DD), width: 2),
+                  border: Border.all(
+                    // Borde verde cuando está en modo accesible
+                    color: _modoAccesible
+                        ? const Color(0xFF1E7A46)
+                        : const Color(0xFFC7D1DD),
+                    width: _modoAccesible ? 4 : 2,
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: const Mapa3D(),
@@ -89,10 +111,22 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               ),
             ),
 
-            // ── Panel derecho con info complementaria ──
+            // ── Columna derecha: selector de modo + panel de info ──
             SizedBox(
               width: _anchoPanel,
-              child: const PanelInfo(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SelectorModo(
+                    accesible: _modoAccesible,
+                    onCambio: _cambiarModo,
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: PanelInfo(modoAccesible: _modoAccesible),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -101,14 +135,94 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 }
 
-/// Muestra web/mapa/index.html dentro de la app (solo funciona en web).
+/// Dos botones grandes para elegir el tipo de mapa.
+class SelectorModo extends StatelessWidget {
+  final bool accesible;
+  final ValueChanged<bool> onCambio;
+
+  const SelectorModo({super.key, required this.accesible, required this.onCambio});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _BotonModo(
+            texto: 'Mapa general',
+            icono: Icons.map_outlined,
+            activo: !accesible,
+            colorActivo: const Color(0xFF0F2A4A),
+            onTap: () => onCambio(false),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _BotonModo(
+            texto: 'Movilidad reducida',
+            icono: Icons.accessible,
+            activo: accesible,
+            colorActivo: const Color(0xFF1E7A46),
+            onTap: () => onCambio(true),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BotonModo extends StatelessWidget {
+  final String texto;
+  final IconData icono;
+  final bool activo;
+  final Color colorActivo;
+  final VoidCallback onTap;
+
+  const _BotonModo({
+    required this.texto,
+    required this.icono,
+    required this.activo,
+    required this.colorActivo,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 64,
+      child: ElevatedButton.icon(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: activo ? colorActivo : Colors.white,
+          foregroundColor: activo ? Colors.white : const Color(0xFF0F1E2E),
+          side: BorderSide(
+            color: activo ? colorActivo : const Color(0xFFC7D1DD),
+            width: 2,
+          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+        ),
+        icon: Icon(icono, size: 26),
+        label: Text(texto, textAlign: TextAlign.center),
+        onPressed: onTap,
+      ),
+    );
+  }
+}
+
+/// Muestra un mapa HTML de la carpeta web/ dentro de la app (solo funciona en web).
 class Mapa3D extends StatelessWidget {
   const Mapa3D({super.key});
 
   static bool _registrado = false;
   static web.HTMLIFrameElement? _iframe;
 
-  /// Mientras se arrastra la barrita, el iframe no debe "robarse" el mouse.
+  /// Cambia el mapa que se muestra (por ejemplo, al de movilidad reducida).
+  static void cargar(String ruta) {
+    _iframe?.src = ruta;
+  }
+
+  /// Mientras se arrastra la barrita o hay un diálogo abierto,
+  /// el iframe no debe "robarse" el mouse.
   static void bloquearEventos(bool bloquear) {
     _iframe?.style.setProperty('pointer-events', bloquear ? 'none' : 'auto');
   }
@@ -118,7 +232,7 @@ class Mapa3D extends StatelessWidget {
     if (!_registrado) {
       ui_web.platformViewRegistry.registerViewFactory('mapa-3d', (int id) {
         final iframe = web.HTMLIFrameElement()
-          ..src = 'mapa/index.html'
+          ..src = rutaMapaGeneral
           ..style.border = 'none'
           ..style.width = '100%'
           ..style.height = '100%';
