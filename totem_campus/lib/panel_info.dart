@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'main.dart' show Mapa3D;
 
 // ─────────────────────────────────────────────────────────────
 // Datos simulados (para la demo). Más adelante pueden venir de un JSON.
@@ -31,12 +32,12 @@ class Contacto {
 }
 
 const avisos = [
-  Aviso('Ascensor Edificio C fuera de servicio',
-      'En mantención hasta el 25/11. Usa el ascensor del Edificio B.',
+  Aviso('Baño del Edificio A fuera de servicio por Mantenimiento',
+      'En mantención hasta el 25/11. Por favor prioriza otra opción. Gracias.',
       Icons.elevator_outlined),
-  Aviso('Obras frente al Edificio D',
-      'Paso cerrado por Av. España. Desvío señalizado por el patio central.',
-      Icons.construction),
+  //Aviso('Obras frente al Edificio D',
+  //    'Paso cerrado por Av. España. Desvío señalizado por el patio central.',
+  //|    Icons.construction),
 ];
 
 const servicios = [
@@ -49,19 +50,21 @@ const servicios = [
 
 const preguntas = [
   Pregunta('¿Dónde puedo imprimir?',
-      'En la Biblioteca Central (piso 1) y en la sala de computadores del Edificio B.'),
-  Pregunta('¿Dónde hay baños accesibles?',
-      'En el piso 1 de los Edificios A, B y C, y en la Biblioteca. Búscalos en el mapa con la categoría "Baños".'),
+      'Dentro del Campus puedes ir a la sala C2xx y encontraras donde imprimir y utiles de papeleria'),
+  Pregunta('¿Cual es el horario de la Universidad?',
+      'El horario de Lunes a Viernes de 7:30 hasta 22:00'),
   Pregunta('¿Cómo pido apoyo si tengo movilidad reducida?',
-      'Acércate a la DAE o usa el botón "Necesito ayuda". También puedes activar la ruta accesible en el mapa.'),
-  Pregunta('Es mi primer día, ¿qué hago?',
-      'Revisa tu horario en el portal, ubica tus salas en el mapa y pasa por la DAE para la bienvenida.'),
+      'Puedes pedir directamente a los guardias o ver las rutas habilitadas para Movilidad Reducida de nuestro campus'),
+  Pregunta('¿Como puedo pedir una Cancha Deportiva?',
+      'Lo puedes hacer directamente en el xxxx, ubicado en la Cancha 11x11'),
 ];
 
 const contactos = [
-  Contacto('Guardia (24 h)', '+56 32 000 0000'),
-  Contacto('Enfermería', '+56 32 000 0001'),
-  Contacto('DAE', '+56 32 000 0002'),
+  Contacto('Central de Emergencia', '+56 32 265 4222'),
+  Contacto('Supervisor de Seguridad (24 h)', '+569 7877 1654'),
+  Contacto('Salud - Prevencionista de Riesgos', '+569 6229 5110'),
+  Contacto('Sansanito 1', '+56 32 265 4639'),
+  Contacto('Sansanito 2', '+569 7334 4188')
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -119,7 +122,7 @@ class PanelInfo extends StatelessWidget {
                   ),
                 const SizedBox(height: 20),
 
-                // ── Clima ──
+              
                 
               ],
             ),
@@ -137,7 +140,7 @@ class PanelInfo extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   textStyle: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                icon: const Icon(Icons.sos, size: 28),
+                //icon: const Icon(Icons.sos, size: 28),  //NO QUIERO ICONOS CHAVAL
                 label: const Text('Necesito ayuda'),
                 onPressed: () => _mostrarAyuda(context),
               ),
@@ -148,8 +151,9 @@ class PanelInfo extends StatelessWidget {
     );
   }
 
-  void _mostrarAyuda(BuildContext context) {
-    showDialog(
+  Future<void> _mostrarAyuda(BuildContext context) async {
+    Mapa3D.bloquearEventos(true);    // el mapa deja de recibir clics
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('¿Necesitas ayuda?'),
@@ -176,6 +180,7 @@ class PanelInfo extends StatelessWidget {
         ],
       ),
     );
+    Mapa3D.bloquearEventos(false);
   }
 }
 
