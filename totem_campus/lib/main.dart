@@ -3,6 +3,8 @@ import 'dart:ui_web' as ui_web;
 import 'package:material_ui/material_ui.dart';
 import 'package:web/web.dart' as web;
 
+import 'panel_info.dart';
+
 void main() {
   runApp(const TotemApp());
 }
@@ -23,47 +25,30 @@ class TotemApp extends StatelessWidget {
   }
 }
 
-class PantallaPrincipal extends StatelessWidget {
+class PantallaPrincipal extends StatefulWidget {
   const PantallaPrincipal({super.key});
+
+  @override
+  State<PantallaPrincipal> createState() => _PantallaPrincipalState();
+}
+
+class _PantallaPrincipalState extends State<PantallaPrincipal> {
+  // Ancho del panel derecho (se cambia arrastrando la barrita del medio)
+  double _anchoPanel = 380;
+  static const double _anchoMin = 280;
+  static const double _anchoMax = 600;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5F8),
-      // Encabezado del tótem
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF0F2A4A),
-        foregroundColor: Colors.white,
-        toolbarHeight: 80,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'UTFSM · Campus Casa Central',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              'Tótem · Edificio A',
-              style: TextStyle(fontSize: 14, color: Color(0xFFC9D6E6)),
-            ),
-          ],
-        ),
-      ),
       body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Mapa USM',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            // Recuadro con el mapa 3D (web/mapa/index.html)
-            // Cambia estos dos números para ajustar el tamaño del recuadro
-            SizedBox(
-              width: 1500, // ancho en píxeles
-              height: 650, // alto en píxeles
+            // ── Mapa 3D (ocupa todo el espacio que sobra) ──
+            Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -74,11 +59,40 @@ class PantallaPrincipal extends StatelessWidget {
                 child: const Mapa3D(),
               ),
             ),
-            const SizedBox(height: 24),
-            // Espacio libre para lo que viene después (buscador, categorías...)
-            const Text(
-              'Aquí irán el buscador y las categorías',
-              style: TextStyle(fontSize: 16, color: Color(0xFF5B6B7D)),
+
+            // ── Barrita para cambiar el tamaño del panel ──
+            MouseRegion(
+              cursor: SystemMouseCursors.resizeColumn,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onHorizontalDragStart: (_) => Mapa3D.bloquearEventos(true),
+                onHorizontalDragUpdate: (detalle) {
+                  setState(() {
+                    _anchoPanel =
+                        (_anchoPanel - detalle.delta.dx).clamp(_anchoMin, _anchoMax);
+                  });
+                },
+                onHorizontalDragEnd: (_) => Mapa3D.bloquearEventos(false),
+                child: SizedBox(
+                  width: 20,
+                  child: Center(
+                    child: Container(
+                      width: 5,
+                      height: 70,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9AA8B8),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Panel derecho con info complementaria ──
+            SizedBox(
+              width: _anchoPanel,
+              child: const PanelInfo(),
             ),
           ],
         ),
@@ -92,6 +106,12 @@ class Mapa3D extends StatelessWidget {
   const Mapa3D({super.key});
 
   static bool _registrado = false;
+  static web.HTMLIFrameElement? _iframe;
+
+  /// Mientras se arrastra la barrita, el iframe no debe "robarse" el mouse.
+  static void bloquearEventos(bool bloquear) {
+    _iframe?.style.setProperty('pointer-events', bloquear ? 'none' : 'auto');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,6 +122,7 @@ class Mapa3D extends StatelessWidget {
           ..style.border = 'none'
           ..style.width = '100%'
           ..style.height = '100%';
+        _iframe = iframe;
         return iframe;
       });
       _registrado = true;
