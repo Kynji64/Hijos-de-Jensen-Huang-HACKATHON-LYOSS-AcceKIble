@@ -44,6 +44,14 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 - `TOTEMS` — puntos físicos de origen
 - `NODES` y `EDGES` — grafo peatonal (`p`: camino plano, `s`: escalera, `r`: rampa)
 
+## Novedades v2 (mapa interactivo)
+
+- **Arquitectura por estilo:** casco histórico neogótico con techos de teja (A con Torre del Reloj y Aula Magna, B con patio y Piscina, C Talleres con techo en diente de sierra, pabellones E/F, Casa Rector H); M, R y T comparten el mismo lenguaje moderno de bandas; D, U, K, M2, P y P2 son minimalistas con muro cortina.
+- **Calles reales en el grafo y pintadas en el suelo:** Talleres, Quezada Acharán, Carlos Van Buren, Carlos Edwards y Agustín Edwards.
+- **Ruta accesible:** evita la escalinata monumental de Av. España y las escaleras de Quezada Acharán y del sector M; sube por Van Buren, Carlos Edwards y Agustín Edwards.
+- **Tour 360° USM:** botón en la tarjeta de cada lugar y de la ruta. Embebe el visor oficial (`/recorridos/campus-casacentral/`, ya que la página pública bloquea iframes) y ofrece abrirlo en una pestaña nueva.
+- `js/map.js`, `css/map.css` y `data/buildings.geojson` son un prototipo aparte con MapLibre y no los carga `index.html`.
+
 ## Licencia
 
 Distribuido bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.

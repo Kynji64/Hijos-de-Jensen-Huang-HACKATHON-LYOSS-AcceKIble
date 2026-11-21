@@ -46,6 +46,7 @@
       <input id="search" type="search" placeholder="Buscar edificio o cancha…" autocomplete="off">
       <button id="clearSearch" aria-label="Borrar búsqueda">✕</button>
     </div>
+    <div class="cats" id="cats" role="tablist" aria-label="Categorías"></div>
     <div class="letters" id="letters"></div>
     <div class="list" id="destList"></div>
   </div>
@@ -55,10 +56,12 @@
 
 <!-- Leyenda -->
 <div id="legend">
-  <span><i style="background:#2a5bd7"></i>Académico</span>
+  <span><i style="background:#a8462c"></i>Histórico</span>
+  <span><i style="background:#4f6584"></i>Moderno</span>
   <span><i style="background:#1f9d55"></i>Deportivo</span>
   <span><i style="background:#d62839"></i>Federación</span>
-  <span><i style="background:#f6f2e8;border:1px solid #c9ced6"></i>Camino</span>
+  <span><i style="background:#c9ced6"></i>Calle</span>
+  <span><i style="background:#f6f2e8;border:1px solid #c9ced6"></i>Sendero</span>
   <span><i style="background:#f08a24"></i>Escalera</span>
   <span><i style="background:#2a8ce0"></i>Rampa</span>
 </div>
@@ -73,6 +76,7 @@
   <div class="chips" id="icChips"></div>
   <p id="icDesc"></p>
   <button class="primary" id="icGo">➜ Cómo llegar aquí</button>
+  <button class="tour-btn" id="icTour">🌐 Ver interior y accesos en Tour 360° USM</button>
   <button class="ghost" id="icFocus">Centrar en el mapa</button>
 </section>
 
@@ -87,6 +91,7 @@
     </div>
     <div class="rc-actions">
       <button id="rcSteps">Pasos</button>
+      <button id="rcTour" aria-label="Ver destino en Tour 360°">🌐 360°</button>
       <button id="rcSpeak" aria-label="Escuchar indicaciones">🔊</button>
       <button id="rcClose" aria-label="Cerrar ruta">✕</button>
     </div>
@@ -105,6 +110,22 @@
   <button id="bigText" aria-label="Texto grande">A+<small>Texto</small></button>
 </div>
 <div id="toast"></div>
+
+<!-- Visor Tour 360° USM (se carga solo al abrirlo) -->
+<div id="tourModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div><small>Tour 360° USM · Casa Central</small><h3 id="tourTitle">Casa Central Valparaíso</h3></div>
+      <a id="tourOpen" class="tour-ext" href="https://tour360.usm.cl/casa-central-valparaiso/" target="_blank" rel="noopener">↗ Abrir en pestaña nueva</a>
+      <button class="x" id="tourClose" aria-label="Cerrar tour">✕</button>
+    </div>
+    <div class="tour-scenes" id="tourScenes"></div>
+    <div class="tour-frame-wrap">
+      <div id="tourLoading" class="tour-loading">Cargando recorrido 360°… Si no aparece, usa “Abrir en pestaña nueva”.</div>
+      <iframe id="tourFrame" title="Tour virtual 360° Casa Central USM" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer"referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+  </div>
+</div>
 
 <script type="module" src="./js/main.js"></script>
 </body>
