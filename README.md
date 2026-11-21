@@ -1,6 +1,6 @@
 # Campus sin barreras · UTFSM Casa Central
 
-Prototipo (Fase 1) para la Hackathon LYOSS USM 2026: mapa 3D interactivo del campus Casa Central (Valparaíso) con rutas exteriores desde 3 tótems y modo **Ruta accesible** (sin escaleras).
+Prototipo (Fase 1) para la Hackathon LYOSS USM 2026: mapa 3D interactivo del campus Casa Central (Valparaíso) con rutas exteriores desde 3 tótems.
 
 ## Estructura del proyecto
 
@@ -32,7 +32,6 @@ Luego abre en el navegador: http://localhost:8765
 ## Parámetros de URL (para QR / tótem físico)
 
 - `?totem=T1|T2|T3` — fija el tótem de origen (`T1`: Av. España, `T2`: San Luis, `T3`: Sector M–R)
-- `?acc=1` — activa la **Ruta accesible** (sin escaleras y solo por la red interna del recinto)
 - `?dest=C` — abre directamente la ruta hacia un destino (`A`, `B`, `C`, `D`, `E`, `F`, `F2`, `H`, `I`, `J`, `K`, `L`, `M`, `M2`, `MAT`, `N`, `P`, `Q`, `R`, `T`, `U`, `SAN`, `PIS`, `PC`, `PCA`, `CM`, `C11`, `TEN`)
 
 ## Editar datos del campus
@@ -51,7 +50,6 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 
 - **Arquitectura por estilo:** casco histórico neogótico con techos de teja (A con Torre del Reloj y Aula Magna, B con patio y Piscina, C Talleres con techo en diente de sierra, pabellones E/F, Casa Rector H); M, R y T comparten el mismo lenguaje moderno de bandas; D, U, K, M2, P y P2 son minimalistas con muro cortina.
 - **Calles reales en el grafo y pintadas en el suelo:** Talleres, Quezada Acharán, Carlos Van Buren, Carlos Edwards y Agustín Edwards.
-- **Ruta accesible:** evita la escalinata monumental de Av. España y las escaleras de Quezada Acharán y del sector M; sube por Van Buren, Carlos Edwards y Agustín Edwards.
 - **Tour 360° USM:** botón en la tarjeta de cada lugar y de la ruta. Embebe el visor oficial (`/recorridos/campus-casacentral/`, ya que la página pública bloquea iframes) y ofrece abrirlo en una pestaña nueva.
 - `js/map.js`, `css/map.css` y `data/buildings.geojson` son un prototipo aparte con MapLibre y no los carga `index.html`.
 

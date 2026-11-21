@@ -686,7 +686,7 @@ function clearRouteMesh() {
 }
 function drawRoute(route) {
   clearRouteMesh();
-  const color = route.accessible ? 0x14b8a6 : 0xffc72c;
+  const color = 0xffc72c;
   const pts = route.nodes.map(id => nodePos(id).add(new THREE.Vector3(0, 0.9, 0)));
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
   const length = curve.getLength(), segs = Math.max(120, Math.floor(length * 3));
@@ -710,7 +710,7 @@ function drawRoute(route) {
 /* =====================================================================
    6. ESTADO + INTERFAZ
    ===================================================================== */
-const state = { origin: 'T1', accessible: false, selected: null, route: null, stepsOpen: false };
+const state = { origin: 'T1', selected: null, route: null, stepsOpen: false };
 const $ = id => document.getElementById(id);
 
 const tween = { active: false };
@@ -750,18 +750,6 @@ $('totemBtns').innerHTML = C.TOTEMS.map(t => {
   return `<button class="totem-btn" data-t="${t.id}"><b>${t.n}</b><span>${t.name}</span><small>${lv.name} · ${lv.sub}</small></button>`;
 }).join('');
 document.querySelectorAll('.totem-btn').forEach(b => b.addEventListener('click', () => setOrigin(b.dataset.t)));
-
-/* ---------- Ruta accesible: sin escaleras y solo por la red interna del recinto ---------- */
-function setAccessible(on) {
-  state.accessible = on;
-  $('accToggle')?.setAttribute('aria-checked', on);
-  $('accRow')?.classList.toggle('on', on);
-  document.body.classList.toggle('acc', on);
-  stepA.color.set(on ? 0x8d949b : 0xd9cdb3); stepB.color.set(on ? 0xa3aab1 : 0xc5b796);   // escaleras "apagadas"
-  if (state.route) routeTo(state.route.placeId);
-  else toast(on ? '♿ Ruta accesible: sin escaleras, por la red interna' : 'Ruta estándar (más corta)');
-}
-$('accRow')?.addEventListener('click', () => setAccessible(!state.accessible));
 
 /* ---------- Letras, buscador y lista ---------- */
 const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -842,7 +830,7 @@ $('icTour').addEventListener('click', () => openTour(state.selected));
 /* ---------- Ruta ---------- */
 function routeTo(placeId) {
   const place = placeObjs[placeId].place;
-  const route = computeRoute(G, place, state.origin, state.accessible);
+  const route = computeRoute(G, place, state.origin, false);
   if (!route) { toast('No se encontró una ruta disponible'); return; }
   const prev = state.route?.placeId;
   if (prev && prev !== placeId) placeObjs[prev].label.element.classList.remove('dest');
@@ -851,23 +839,17 @@ function routeTo(placeId) {
   fitPoints(drawRoute(route));
 
   const t = totemById(state.origin);
-  $('rcFrom').textContent = `Desde Tótem ${t.n} · ${t.name}${route.accessible ? ' · ♿ Ruta accesible' : ''}`;
+  $('rcFrom').textContent = `Desde Tótem ${t.n} · ${t.name}`;
   $('rcTo').textContent = place.name + (place.sub ? ' · ' + place.sub : '');
   $('rcDist').textContent = Math.round(route.meters);
   $('rcTime').textContent = route.minutes;
-  $('rcStairs').textContent = route.accessible ? route.ramps : route.stairs;
-  $('rcStairsLbl').textContent = route.accessible ? 'rampas' : 'escaleras';
+  $('rcStairs').textContent = route.stairs;
+  $('rcStairsLbl').textContent = route.stairs === 1 ? 'escalera' : 'escaleras';
 
   const note = $('rcNote'), extNote = route.external ? ' Incluye un tramo por calle exterior (fuera de las rejas).' : '';
-  if (route.accessible) {
-    const std = computeRoute(G, place, state.origin, false), extra = Math.round(route.meters - std.meters);
-    note.className = 'rc-note ok';
-    note.textContent = (std.stairs === 0
-      ? '✅ Sin escaleras: coincide con la ruta estándar.'
-      : `✅ Sin escaleras: evita ${std.stairs} escalera${std.stairs > 1 ? 's' : ''}${extra > 0 ? ` (+${extra} m respecto a la ruta más corta)` : ''}.`) + extNote;
-  } else if (route.stairs > 0) {
+  if (route.stairs > 0) {
     note.className = 'rc-note warn';
-    note.textContent = `⚠️ Incluye ${route.stairs} escalera${route.stairs > 1 ? 's' : ''}. Activa “♿ Ruta accesible” para evitarlas.` + extNote;
+    note.textContent = `⚠️ Incluye ${route.stairs} escalera${route.stairs > 1 ? 's' : ''}.` + extNote;
   } else {
     note.className = 'rc-note ok'; note.textContent = '✅ Esta ruta no tiene escaleras.' + extNote;
   }
@@ -954,7 +936,6 @@ function resetIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     clearRoute(); closeCard(); $('tourModal').classList.add('hidden'); $('search').value = ''; renderList();
-    if (state.accessible) setAccessible(false);
     flyTo(HOME.target, HOME.position, 1.6);
     controls.autoRotate = true; $('autoRot').classList.add('on');
   }, IDLE_RESET_MS);
@@ -1006,10 +987,9 @@ const qs = new URLSearchParams(location.search);
 renderList();
 updateToggleIcon();
 setOrigin(C.TOTEMS.some(t => t.id === qs.get('totem')) ? qs.get('totem') : 'T1', true);
-if (qs.get('acc') === '1') setAccessible(true);
 if (qs.get('dest') && placeObjs[qs.get('dest')]) { selectPlace(qs.get('dest'), false); routeTo(qs.get('dest')); }
 resetIdle();
 animate();
 // depuración: window.campus.view(target, position) dibuja un cuadro aunque la pestaña esté en segundo plano
-window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, setAccessible, openTour,
+window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour,
   view(t, p) { if (t) controls.target.set(...t); if (p) camera.position.set(...p); tween.active = false; controls.update(); renderer.render(scene, camera); labelRenderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.8); } };
