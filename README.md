@@ -10,6 +10,7 @@ Prototipo (Fase 1) para la Hackathon LYOSS USM 2026: mapa 3D interactivo del cam
 │   └── styles.css                 # Estilos de la interfaz, tarjetas, etiquetas 3D y vista móvil
 ├── js/
 │   ├── main.js                   # Escena 3D (Three.js), controles, ruta animada y lógica de UI
+│   ├── terrain.js                # Ladera Av. España → Los Placeres: alturas, terrazas y utilidades geométricas
 │   ├── data/
 │   │   └── campus-data.js        # Coordenadas, terrazas, edificios, canchas, tótems y grafo peatonal
 │   └── pathfinding/
@@ -31,17 +32,20 @@ Luego abre en el navegador: http://localhost:8765
 ## Parámetros de URL (para QR / tótem físico)
 
 - `?totem=T1|T2|T3` — fija el tótem de origen (`T1`: Av. España, `T2`: San Luis, `T3`: Sector M–R)
-- `?dest=C` — abre directamente la ruta hacia un destino (`A`, `B`, `C`, `D`, `E`, `F`, `H`, `K`, `M`, `M2`, `P`, `P2`, `R`, `T`, `U`, `CM`, `C11`, `FED`)
+- `?acc=1` — activa la **Ruta accesible** (sin escaleras y solo por la red interna del recinto)
+- `?dest=C` — abre directamente la ruta hacia un destino (`A`, `B`, `C`, `D`, `E`, `F`, `F2`, `H`, `I`, `J`, `K`, `L`, `M`, `M2`, `MAT`, `N`, `O`, `P`, `Q`, `R`, `R2`, `T`, `U`, `SAN`, `PIS`, `PC`, `PCA`, `CM`, `C11`, `TEN`)
 
 ## Editar datos del campus
 
-Toda la información geográfica y topológica se encuentra en `js/data/campus-data.js`, expresada en coordenadas de píxel referenciales del plano del campus:
+Toda la información geográfica y topológica se encuentra en `js/data/campus-data.js`, en píxeles del mapa OpenStreetMap del campus (captura 2000 × 1022 px, norte arriba, ≈ 0,28 m/px). Letras de edificios, calles internas y espacios según el plano físico oficial del campus (dibujado con el sur arriba):
 
 - `OUTLINE` — polígono del perímetro del recinto
 - `LEVELS` y `BAND` — terrazas de elevación (nivel bajo, medio y alto)
 - `PLACES` — edificios, canchas y puntos de interés con sus nodos de acceso (`entries`)
 - `TOTEMS` — puntos físicos de origen
-- `NODES` y `EDGES` — grafo peatonal (`p`: camino plano, `s`: escalera, `r`: rampa)
+- `STREETS` y `PATHS` — calles (`ext: true` = calle pública exterior, `ext: false` = calle interna del recinto) y senderos como polilíneas; la red de rutas se genera sola (nodos cada ~7 m, extremos soldados, altura desde el terreno). Un sendero con pendiente > 14 % se trata como escalera; `type: 's'` / `'r'` fuerza escalera o rampa
+- `GREENS` y `PLAZAS` — áreas verdes (ladera, Patio de los Cañones, Ceibos, entorno CED) y plazas (Patio Central)
+- `TERRAIN` — polilíneas de Av. España y Av. Los Placeres y posición de los taludes
 
 ## Novedades v2 (mapa interactivo)
 

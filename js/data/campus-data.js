@@ -1,190 +1,301 @@
 /* =====================================================================
    DATOS DEL CAMPUS · UTFSM Casa Central (Valparaíso)
    ---------------------------------------------------------------------
-   Módulo ES: exporta CAMPUS (lo importan js/main.js y el enrutador).
+   Módulo ES: exporta CAMPUS (lo importan js/main.js, js/terrain.js y el
+   enrutador).
 
-   Todas las coordenadas están en PÍXELES del plano general del recinto
-   (imagen ≈ 611 × 457 px, Av. España abajo). Así se corrigen mirando
-   la imagen. La escena convierte con: x = (px-370)*0.5 · z = (py-250)*0.5
+   Referencias:
+     · Plano físico oficial del campus (letras de edificios, calles internas,
+       Patio Central, Patio de los Cañones, Piscina, accesos).
+     · Mapa OpenStreetMap (captura 2000 × 1022 px, norte arriba) para la
+       geometría. TODAS las coordenadas están en píxeles de esa imagen
+       (≈ 0,28 m por píxel). El plano oficial está dibujado con el sur hacia
+       arriba (Av. Los Placeres arriba): es el mismo campus girado 180°.
+
+   La trama urbana está girada ≈ -22°. La escena gira el mundo +22° para que
+   calles y edificios queden alineados con los ejes.
    ===================================================================== */
 
-  /* ---------- Terrazas (topografía) ----------
-     Franjas horizontales del plano: alta (py < 220), media, baja (py > 400). */
-  const LEVELS = [
-    { name: 'Nivel bajo',  sub: 'Av. España',                       h: 0.6, top: 0xdfe5d9 },
-    { name: 'Nivel medio', sub: 'Casco histórico · canchas',        h: 5.0, top: 0xe7ecdf },
-    { name: 'Nivel alto',  sub: 'Av. Placeres · Calle Talleres',    h: 9.4, top: 0xeef1e7 },
-  ];
-  const BAND = { highMax: 220, midMax: 400 };
+const ROT = -22;   // orientación dominante de la trama (grados, sentido de la imagen)
 
-  /* ---------- Polígono del recinto (línea roja del plano) ---------- */
-  const OUTLINE = [
-    [205,62],[236,58],[240,112],[262,132],[300,133],[337,128],[340,58],[358,45],[376,58],[380,118],
-    [402,132],[440,140],[458,150],[464,200],[470,232],[466,262],[492,276],[540,290],[576,320],[600,355],
-    [608,390],[590,406],[520,414],[432,434],[332,410],[318,398],[305,362],[200,362],[190,330],[185,292],
-    [160,266],[150,240],[140,216],[130,204],[150,180],[170,160],[185,140],[205,120]
-  ];
+/* ---------- Terreno ----------
+   Ladera entre Av. España (mar, cota baja) y Av. Los Placeres (cota alta).
+   s = 0 en España … 1 en Placeres. low/high = centro y ancho de los taludes. */
+const TERRAIN = {
+  heights: [1.0, 5.0, 9.0],          // unidades 3D (≈ 2,15 m c/u)
+  low:  { c: 0.17, w: 0.08 },        // ladera verde: Acceso Av. España (abajo) → Agustín Edwards / Edificio A
+  high: { c: 0.66, w: 0.04 },        // talud entre la terraza media y Quezada Acharán
+  coast: 95,                         // px de borde costero (vía férrea) antes del mar
+  espana:   [[-40,520],[30,380],[110,265],[220,160],[350,75],[480,15],[650,-40],[900,-85],[1180,-110],[1500,-190],[2000,-370],[2600,-600]],
+  placeres: [[500,1260],[700,1150],[968,1012],[1200,920],[1500,800],[1800,682],[1960,620],[2300,490],[2700,330]],
+};
 
-  /* ---------- Categorías ---------- */
-  const CATS = {
-    historico:  { label: 'Edificio histórico', group: 'Históricos',  css: '#a8462c' },
-    moderno:    { label: 'Edificio moderno',   group: 'Modernos',    css: '#4f6584' },
-    deportivo:  { label: 'Espacio deportivo',  group: 'Deportes',    css: '#1f9d55' },
-    federacion: { label: 'Federación / Servicios', group: 'Federación / Servicios', css: '#d62839' },
-  };
+/* ---------- Polígono del recinto (rejas / porterías) ---------- */
+const OUTLINE = [
+  [150,470],[200,330],[250,240],[380,160],[560,95],[700,60],[900,10],[1100,-10],[1250,-15],
+  [1500,-10],[1540,60],[1560,170],[1700,150],[1790,140],[1830,250],[1870,380],[1960,600],
+  [1800,665],[1500,785],[1200,905],[985,990],[930,940],[860,880],[790,820],[730,740],[680,680],
+  [620,630],[480,592],[330,545],[230,510]
+];
 
-  /* ---------- Tour 360° oficial ----------
-     La página pública bloquea iframes (X-Frame-Options: sameorigin), por eso
-     el modal embebe el visor directo y ofrece abrir la página oficial aparte.
-     Las escenas son nombres reales del recorrido (menú del visor).            */
-  const TOUR = {
-    page:   'https://tour360.usm.cl/casa-central-valparaiso/',
-    viewer: 'https://tour360.usm.cl/recorridos/campus-casacentral/',
-    general: ['Acceso Campus', 'Biblioteca', 'Museo Institucional', 'Patio del Cañón',
-              'Jardín de La Fuente', 'Calle Quezada Acharán', 'Calle Edwards', 'Calle Talleres'],
-  };
+/* ---------- Categorías ---------- */
+const CATS = {
+  historico: { label: 'Edificio histórico', css: '#a8462c' },
+  moderno:   { label: 'Edificio moderno',   css: '#4f6584' },
+  deportivo: { label: 'Espacio deportivo',  css: '#1f9d55' },
+  espacio:   { label: 'Espacio abierto',    css: '#b8892b' },
+  servicios: { label: 'Servicios',          css: '#d62839' },
+};
 
-  /* ---------- Calles internas (nombres reales del plano ilustrado) ---------- */
-  const STREETS = {
-    TAL: 'Calle Talleres',
-    QA:  'Calle Quezada Acharán',
-    CVB: 'Calle Carlos Van Buren',
-    CE:  'Calle Carlos Edwards',
-    AE:  'Calle Agustín Edwards',
-  };
+/* ---------- Tour 360° oficial ---------- */
+const TOUR = {
+  page:   'https://tour360.usm.cl/casa-central-valparaiso/',
+  viewer: 'https://tour360.usm.cl/recorridos/campus-casacentral/',
+  general: ['Acceso Campus', 'Patio Central', 'Patio del Cañón', 'Jardín de La Fuente', 'Calle Quezada Acharán', 'Calle Edwards', 'Calle Talleres'],
+};
 
-  /* ---------- Lugares ----------
-     style  → generador arquitectónico en la escena:
-       'gothic-a'   Edificio A: alas neogóticas + Torre del Reloj
-       'gothic-court' B: claustro con patio + piscina al norte
-       'talleres'   C: nave industrial con techo diente de sierra
-       'gothic-pav' E/F: pabellones de teja a dos aguas
-       'chalet'     H: casona con techo inclinado
-       'mrt'        M/R/T: bloque moderno de bandas horizontales (mismo estilo)
-       'modern'     D/U/K/M2/P/P2: volumen minimalista con muro cortina
-       'field' / 'multi' / 'house'
-     px,py = centro · w,d = ancho/fondo (px) · h = altura sobre la terraza
-     entries = nodos del grafo que funcionan como acceso
-     interior = reservado para la Fase 2 (pisos y salas)                    */
-  const PLACES = [
-    { id:'A', name:'Edificio A', sub:'Aula Magna · Torre del Reloj', cat:'historico', style:'gothic-a',
-      px:410, py:345, w:84, d:66, h:12, entries:['m_af','m_ppo','m_por'],
-      tour:['Frontis Aula Magna','Aula Magna','Edificio A'],
-      desc:'Edificio emblemático del casco histórico neogótico. Su fachada mira hacia Av. España; en el centro se eleva la Torre del Reloj y detrás el cuerpo del Aula Magna, entre el Patio Poniente y el Patio Oriente. Desde Av. España se llega por la escalinata monumental o, sin escaleras, por Calle Agustín Edwards.' },
-    { id:'B', name:'Edificio B', sub:'Patio interior · Piscina', cat:'historico', style:'gothic-court',
-      px:392, py:268, w:92, d:46, h:11, entries:['m_pab','m_bw','m_vb35','m_pool'],
-      tour:['Edificio B','Edificio B - Química','Patio Central','Piscina','Patio Interior'],
-      desc:'Claustro histórico con patio interior abierto. En su costado norte está la Piscina, junto a Calle Quezada Acharán. Accesos por el patio que lo separa del Edificio A, por Carlos Edwards y por Carlos Van Buren.' },
-    { id:'C', name:'Edificio C', sub:'Talleres', cat:'historico', style:'talleres',
-      px:350, py:182, w:150, d:48, h:9, entries:['h_cs','h_cn'],
-      tour:['Edificio C','Edificio C - LEMCO','Calle Talleres'],
-      desc:'Nave industrial histórica de los Talleres, con techumbre en diente de sierra y claraboyas. Está en la terraza alta, entre Calle Talleres (norte) y Calle Quezada Acharán (sur).' },
-    { id:'D', name:'Edificio D', cat:'moderno', style:'modern', px:490, py:305, w:36, d:36, h:14, entries:['m_vb3'],
-      tour:['Edificio D'],
-      desc:'Edificio moderno del sector oriente, al otro lado de Calle Carlos Van Buren frente al Edificio B.' },
-    { id:'E', name:'Edificio E', sub:'Ex Internado', cat:'historico', style:'gothic-pav', px:500, py:350, w:50, d:10, h:8, entries:['m_gar'],
-      tour:['Edificio E'],
-      desc:'Pabellón histórico del antiguo Internado, con techo de teja a dos aguas. Se abre hacia los jardines geométricos que comparte con el Edificio F.' },
-    { id:'F', name:'Edificio F', sub:'Ex Pensionado', cat:'historico', style:'gothic-pav', px:505, py:385, w:50, d:10, h:8, entries:['m_gar'],
-      tour:['Edificio F','Edificio F - Informática'],
-      desc:'Pabellón histórico del antiguo Pensionado, paralelo al Edificio E y separado de él por jardines geométricos. Acceso desde Calle Carlos Van Buren.' },
-    { id:'H', name:'Edificio H', sub:'Casa Rector', cat:'historico', style:'chalet', px:295, py:335, w:22, d:16, h:6, entries:['m_ce1'],
-      desc:'Casona histórica de la Casa Rector, rodeada de jardines, entre la Cancha 11x11 y la bajada hacia Av. España. Acceso por Calle Carlos Edwards.' },
-    { id:'K', name:'Edificio K', cat:'moderno', style:'modern', px:250, py:165, w:20, d:26, h:9, entries:['h_k'],
-      desc:'Edificio moderno de la terraza alta sobre Calle Talleres, entre el Edificio R y el Edificio C.' },
-    { id:'M', name:'Edificio M', cat:'moderno', style:'mrt', px:178, py:248, w:20, d:40, h:14, entries:['m_m'],
-      desc:'Bloque moderno del sector poniente (mismo lenguaje que R y T). Desde el Tótem 3 se baja por escalera; en modo accesible se rodea por Calle Carlos Edwards.' },
-    { id:'M2', name:'Edificio M2', cat:'moderno', style:'modern', px:205, py:262, w:16, d:20, h:8, entries:['m_m2'],
-      tour:['Edificio M2','Edificio M2 - Sala de Máquinas'],
-      desc:'Edificio moderno contiguo al Edificio M, al poniente de la Cancha 11x11.' },
-    { id:'P', name:'Edificio P', cat:'moderno', style:'modern', px:352, py:104, w:24, d:30, h:12, entries:['h_p'],
-      desc:'Edificio moderno del extremo norte, junto a la Entrada San Luis (Tótem 2).' },
-    { id:'P2', name:'Edificio P2', cat:'moderno', style:'modern', px:357, py:70, w:20, d:20, h:9, entries:['h_p2'],
-      desc:'Edificio moderno contiguo al Edificio P, en el extremo norte del recinto.' },
-    { id:'R', name:'Edificio R', cat:'moderno', style:'mrt', px:205, py:158, w:30, d:24, h:12, entries:['h_rs'],
-      desc:'Bloque moderno del sector alto poniente (mismo lenguaje que M y T), junto al Tótem 3 y la Cancha Multiuso.' },
-    { id:'T', name:'Edificio T', cat:'moderno', style:'mrt', px:572, py:372, w:34, d:14, h:10, rot:-38, entries:['m_t'],
-      desc:'Bloque moderno del extremo oriente (mismo lenguaje que M y R), al final de los jardines de E y F.' },
-    { id:'U', name:'Edificio U', cat:'moderno', style:'modern', px:344, py:328, w:22, d:56, h:12, entries:['m_ue','m_ce1'],
-      desc:'Edificio moderno alargado entre Calle Carlos Edwards y el ala poniente del Edificio A.' },
-    { id:'CM', name:'Cancha Multiuso', icon:'🏀', code:'8013', cat:'deportivo', style:'multi', px:222, py:198, w:30, d:22, entries:['h_mc'],
-      tour:['Cancha Deportiva'],
-      desc:'Cancha multiuso del sector poniente (sector 8013 del plano), entre los edificios M y R, a pasos del Tótem 3.' },
-    { id:'C11', name:'Cancha de Fútbol 11x11', icon:'⚽', code:'8007', cat:'deportivo', style:'field', px:258, py:268, w:56, d:76, entries:['m_ce3','m_fs'],
-      tour:['Cancha de Fútbol','Tribuna'],
-      desc:'Cancha de fútbol 11x11 de pasto (sector 8007 del plano), al oriente de los edificios M y M2 y sobre la Casa Rector (H).' },
-    { id:'FED', name:'Casa de la Federación', short:'FEUTFSM', icon:'★', cat:'federacion', style:'house', px:162, py:205, w:14, d:12, h:4.5, entries:['h_fed'],
-      desc:'Casa de la Federación de Estudiantes (FEUTFSM): edificación pequeña inmediatamente al norte del Edificio M, junto al Tótem 3.' },
-  ];
-  PLACES.forEach(p => { p.interior = null; /* Fase 2: { floors: [{ n, name, rooms: [] }] } */ });
+/* ---------- Calles ----------
+   ext: true  = calle pública exterior (asfalto oscuro, fuera de las rejas)
+   ext: false = calle interna del recinto (pavimento claro, demarcada)
+   graph: forma parte de la red de rutas. Los vértices compartidos son cruces
+   (los cruces interna/externa corresponden a las porterías).               */
+const STREETS = {
+  // Exteriores
+  ESP: { name: 'Av. España',            ext: true,  width: 8,   graph: false, pts: TERRAIN.espana.slice(0, 10) },
+  PLA: { name: 'Av. Los Placeres',      ext: true,  width: 6.5, graph: true,  pts: [[700,1150],[968,1012],[1200,920],[1440,824],[1500,800],[1800,682],[1850,663],[1960,620],[2150,545]] },
+  SL:  { name: 'Subida San Luis',       ext: true,  width: 4.2, graph: true,  pts: [[-60,600],[60,530],[180,520],[240,540],[300,560],[420,610],[560,632],[650,645],[700,700],[745,778],[790,845],[860,905],[920,960],[968,1012],[1000,1080],[1060,1200]] },
+  VAL: { name: 'Pasaje Valdés',         ext: true,  width: 3.2, graph: false, pts: [[1960,620],[1885,410],[1840,260],[1800,90]] },
+  GB:  { name: 'General Bari',          ext: true,  width: 3.4, graph: false, pts: [[1555,120],[1700,95],[1800,80],[2000,15]] },
+  MAT: { name: 'Av. Matta',             ext: true,  width: 4.2, graph: true,  pts: [[1850,663],[1890,760],[1940,880],[1990,1000],[2040,1120]] },
+  SG:  { name: 'San Guillermo',         ext: true,  width: 3.4, graph: false, pts: [[1440,824],[1480,930],[1530,1050],[1570,1160]] },
+  // Internas
+  AE:  { name: 'Calle Agustín Edwards', ext: false, width: 3.6, graph: true,  pts: [[240,540],[235,495],[215,420],[212,330],[240,262],[300,220],[420,175],[560,122],[640,135],[700,195],[780,190],[900,150],[1040,108],[1082,140]] },
+  CE:  { name: 'Calle Carlos Edwards',  ext: false, width: 3.4, graph: true,  pts: [[1082,140],[1120,240],[1175,360],[1240,425],[1300,480],[1340,500],[1460,478],[1600,445],[1720,412]] },
+  CEL: { name: 'Calle Carlos Edwards',  ext: false, width: 3.2, graph: true,  pts: [[1300,480],[1350,555]] },
+  QA:  { name: 'Calle Quezada Acharán', ext: false, width: 3.8, graph: true,  pts: [[745,778],[845,765],[905,742],[1050,680],[1200,620],[1350,555],[1450,520],[1580,465],[1720,412],[1790,385]] },
+  TAL: { name: 'Calle Talleres',        ext: false, width: 2.8, graph: true,  pts: [[989,955],[1526,738]] },
+  CVB: { name: 'Calle Carlos Van Buren', ext: false, width: 3.4, graph: true, pts: [[235,495],[330,525],[480,578],[640,580],[745,560],[790,535],[810,520]] },
+  CVS: { name: 'Calle Carlos Van Buren', ext: false, width: 3.2, graph: true, pts: [[745,560],[745,615],[765,690],[805,740],[845,765]] },
+};
 
-  /* ---------- Tótems ---------- */
-  const TOTEMS = [
-    { id:'T1', n:1, name:'Entrada Av. España', short:'Av. España' },
-    { id:'T2', n:2, name:'Entrada San Luis',   short:'San Luis' },
-    { id:'T3', n:3, name:'Entre Edificio M y R', short:'Sector M–R' },
-  ];
+/* ---------- Senderos peatonales internos (polilíneas) ----------
+   type: p = sendero (si la pendiente supera ~14 % se trata como escalera)
+         s = escalera explícita · r = rampa accesible explícita
+   Los extremos se "sueldan" a la calle o sendero más cercano; las puertas
+   de los edificios (entries) quedan fijas.                                 */
+const PATHS = [
+  // Acceso Av. España: portería I, escalinata monumental y sendero bajo de la ladera
+  { pts: ['T1', [885,46]] },
+  { name: 'la escalinata de Av. España', type: 's', width: 6, pts: ['T1', [852,100], [842,160]] },
+  { name: 'la plaza del Edificio A', pts: [[842,182], [828,210]] },
+  { name: 'el sendero bajo de la ladera', pts: ['T1', [760,70], [640,100], [560,122]] },
+  { name: 'los jardines de Av. España', pts: [[560,122],[520,82],[585,52],[540,12]] },
+  // Patio Central (entre A, B y D)
+  { name: 'el Patio Central', pts: [[867,320],[847,420],[970,468]] },
+  { name: 'el Patio Central', pts: [[847,420],[800,436]] },
+  { name: 'el Patio Central', pts: [[847,420],[810,520]] },
+  { pts: [[728,312],[800,436]] },
+  { pts: [[728,312],[676,354],[666,420]] },
+  { pts: [[589,431],[666,420]] },
+  // Patio de los Cañones (jardines geométricos entre E, F2 y F)
+  { name: 'el Patio de los Cañones', pts: [[292,348],[381,369],[470,390]] },
+  { name: 'el Patio de los Cañones', pts: [[438,289],[381,369],[331,446]] },
+  { name: 'el Patio de los Cañones', pts: [[438,289],[464,335],[534,307],[604,279]] },
+  { name: 'el Patio de los Cañones', pts: [[514,258],[534,307],[561,359]] },
+  { pts: [[459,276],[438,289]] },
+  { pts: [[459,276],[514,258]] },
+  { pts: [[470,390],[474,436],[589,431]] },
+  { pts: [[331,446],[330,524]] },
+  { pts: [[292,348],[214,346]] },
+  { pts: [[430,204],[432,172]] },
+  { pts: [[165,410],[213,402]] },
+  { pts: [[452,530],[452,566]] },                                          // Cancha de Tenis
+  // Casa Rector (H) en la ladera bajo la cancha
+  { name: 'el sendero de la Casa Rector', type: 'r', pts: [[1214,86],[1150,112],[1082,140]] },
+  // A ↔ U ↔ B (pasaje de la Biblioteca y del Gimnasio 3)
+  { pts: [[970,241],[1001,308],[1010,360],[1038,434]] },
+  { pts: [[1089,272],[1134,272]] },
+  { name: 'el pasaje del Gimnasio 3', pts: [[970,241],[1000,233],[1060,205],[1097,174]] },
+  { pts: [[1173,500],[1262,445]] },
+  { pts: [[1049,661],[1050,681]] },
+  { pts: [[848,631],[757,640]] },
+  // Cancha CED, Edificio L, Gimnasio 2 y Edificio M
+  { pts: [[1252,340],[1185,345]] },
+  { name: 'el entorno de la Cancha CED', pts: [[1150,290],[1235,248],[1283,252]] },
+  { name: 'el entorno de la Cancha CED', pts: [[1460,478],[1470,425]] },
+  { pts: [[1673,310],[1662,380]] },
+  { name: 'la rampa del Edificio M', type: 'r', pts: [[1728,300],[1700,330],[1662,380],[1656,428]] },
+  { pts: [[1806,368],[1792,384]] },
+  // Edificio C (Talleres) y cadena J · Q · K · O · N junto a Subida San Luis
+  { pts: [[1183,662],[1181,628]] },
+  { pts: [[940,864],[915,875]] },
+  { pts: [[1254,840],[1258,852]] },
+  { name: 'el pasaje interior de San Luis', pts: [[868,768],[897,845],[928,905],[972,945],[989,955]] },
+  { pts: [[962,962],[972,947]] },
+  { pts: [[895,880],[915,880]] },
+  { pts: [[821,794],[821,768]] },
+  { pts: [[868,820],[885,818]] },
+  { pts: [[799,845],[791,845]] },
+  { pts: [[683,677],[690,683]] },
+  { pts: [[741,654],[754,654]] },
+  { pts: [[714,539],[714,566]] },
+  { pts: ['T2', [790,772]] },
+  { name: 'el pasaje oriente de Talleres', pts: [[1515,503],[1548,600],[1545,700],[1526,738]] },
+  // Tótem 3: Sansanito, R, R2, Cancha Multiuso, Quezada Acharán
+  { pts: ['T3', [1690,428]] },
+  { pts: ['T3', [1655,571]] },
+  { pts: ['T3', [1729,577]] },
+  { pts: ['T3', [1747,526]] },
+  { pts: [[1656,541],[1670,538]] },
+  // Fuera del recinto: P1-P2 y Edificio Matta (cruzando Av. Los Placeres)
+  { name: 'el cruce de Av. Los Placeres', pts: [[1322,908],[1318,874]] },
+  { pts: [[1898,849],[1925,849]] },
+];
 
-  /* ---------- Nodos del grafo peatonal ----------
-     [px, py, etiqueta opcional para las indicaciones]
-     h_ = nivel alto · m_ = nivel medio · l_ = nivel bajo                 */
-  const NODES = {
-    T1:[410,424,'el Tótem 1'], T2:[322,136,'el Tótem 2'], T3:[188,196,'el Tótem 3'],
-    // Nivel alto
-    h_tal2:[322,146], h_t1:[268,146], h_k:[250,146], h_w1:[230,146],
-    h_cn:[350,146,'el acceso norte del Edificio C'], h_tal4:[400,146], h_vb6:[446,148],
-    h_p:[352,126], h_p2b:[372,122], h_p2:[372,72],
-    h_mc:[230,180,'la Cancha Multiuso'], h_rs:[205,178], h_fed:[174,205], h_w2:[244,182], h_w3:[252,213],
-    h_st3:[195,214], h_qa1:[268,213], h_ce4:[295,213], h_qa2:[330,213],
-    h_cs:[350,213,'el acceso sur del Edificio C'], h_qa3:[400,213], h_vb5:[448,208],
-    // Nivel medio
-    m_m:[195,234,'el Edificio M'], m_mid:[193,277], m_m2:[205,280], m_fw:[215,312],
-    m_fs:[258,320,'la Cancha 11x11'], m_ce3:[305,248], m_ce2:[310,296], m_ce1:[318,336], m_ae:[326,384],
-    m_qs:[330,236], m_bw:[338,268], m_pool:[392,241,'la Piscina'], m_vb4:[452,240],
-    m_uen:[358,296], m_pab:[400,301,'el patio entre los edificios A y B'], m_ue:[361,330],
-    m_ppo:[390,340,'el Patio Poniente'], m_por:[430,340,'el Patio Oriente'],
-    m_afw:[362,390], m_af:[410,390,'el frontis del Aula Magna'], m_vb1:[462,390],
-    m_vb2:[462,365], m_vb3:[458,302], m_vb35:[455,268],
-    m_gar:[505,367,'los jardines entre E y F'], m_gare:[548,367], m_t:[550,380],
-    // Nivel bajo
-    l_esc:[410,412], l_ae1:[372,414], l_vb0:[472,420],
-  };
+/* ---------- Tótems ---------- */
+const TOTEMS = [
+  { id:'T1', n:1, name:'Acceso Av. España',  short:'Av. España',  at:[862,40] },
+  { id:'T2', n:2, name:'Subida San Luis',    short:'San Luis',    at:[768,752] },
+  { id:'T3', n:3, name:'Sector M – R',       short:'Sector M–R',  at:[1690,500] },
+];
 
-  /* ---------- Tramos ----------
-     [nodoA, nodoB, tipo, calle?, ancho?]
-     tipo: p = camino plano · s = escalera · r = rampa / pendiente continua */
-  const EDGES = [
-    // Calle Talleres (borde superior, detrás de C)
-    ['h_w1','h_k','p','TAL'],['h_k','h_t1','p','TAL'],['h_t1','h_tal2','p','TAL'],['h_tal2','h_cn','p','TAL'],
-    ['h_cn','h_tal4','p','TAL'],['h_tal4','h_vb6','p','TAL'],
-    ['T2','h_tal2','p'],['h_tal2','h_p','p'],['h_p','h_cn','p'],['h_p','h_p2b','p'],['h_p2b','h_p2','p'],
-    // Sector poniente alto (R, Cancha Multiuso, FEUTFSM, T3)
-    ['h_w1','h_mc','p'],['h_mc','h_rs','p'],['h_rs','T3','p'],['T3','h_fed','p'],['T3','h_st3','p'],
-    ['h_mc','h_w2','p'],['h_w2','h_w3','p'],['h_w3','h_st3','p'],['h_w3','h_qa1','p'],['h_t1','h_qa1','p'],
-    // Calle Quezada Acharán (entre B y C)
-    ['h_qa1','h_ce4','p','QA'],['h_ce4','h_qa2','p','QA'],['h_qa2','h_cs','p','QA'],['h_cs','h_qa3','p','QA'],['h_qa3','h_vb5','p','QA'],
-    // Calle Carlos Van Buren (subida oriente hacia San Luis, pendiente continua)
-    ['l_vb0','m_vb1','r','CVB'],['m_vb1','m_vb2','p','CVB'],['m_vb2','m_vb3','p','CVB'],['m_vb3','m_vb35','p','CVB'],
-    ['m_vb35','m_vb4','p','CVB'],['m_vb4','h_vb5','r','CVB'],['h_vb5','h_vb6','p','CVB'],
-    // Calle Carlos Edwards (curva entre la Cancha 11x11 y el patio A-B)
-    ['h_ce4','m_ce3','r','CE'],['m_ce3','m_ce2','p','CE'],['m_ce2','m_ce1','p','CE'],['m_ce1','m_ae','p','CE'],
-    // Calle Agustín Edwards (borde inferior y subida desde Av. España)
-    ['T1','l_ae1','p','AE'],['l_ae1','m_ae','r','AE'],['T1','l_vb0','p','AE'],
-    // Escaleras
-    ['l_esc','m_af','s',null,6.5],          // escalinata monumental Av. España → Aula Magna
-    ['h_qa2','m_qs','s'],                   // escala Quezada Acharán → Piscina / B
-    ['h_st3','m_m','s'],                    // escala T3 → Edificio M
-    ['T1','l_esc','p'],
-    // Terraza media: casco histórico
-    ['m_qs','m_pool','p'],['m_pool','m_vb4','p'],['m_qs','m_bw','p'],['m_qs','m_ce3','p'],['m_bw','m_ce3','p'],['m_bw','m_ce2','p'],
-    ['m_ce2','m_uen','p'],['m_uen','m_pab','p'],['m_uen','m_ue','p'],['m_ue','m_afw','p'],
-    ['m_pab','m_ppo','p'],['m_pab','m_por','p'],['m_pab','m_vb3','p'],
-    ['m_ae','m_afw','p'],['m_afw','m_af','p'],['m_af','m_vb1','p'],
-    ['m_vb2','m_gar','p'],['m_gar','m_gare','p'],['m_gare','m_t','p'],
-    // Terraza media: sector poniente (M, M2, cancha)
-    ['m_ce2','m_fs','p'],['m_fs','m_fw','p'],['m_fw','m_m2','p'],['m_m2','m_mid','p'],['m_mid','m_m','p'],
-  ];
+/* ---------- Lugares ----------
+   px,py = centro · w = largo (a lo largo de la calle) · d = fondo · h = altura
+   rot = orientación (por defecto la de la trama) · entries = accesos (px)
+   outside = fuera del recinto (la ruta puede usar calles exteriores)        */
+const PLACES = [
+  { id:'A', name:'Edificio A', sub:'Aula Magna · Torre del Reloj', cat:'historico', style:'gothic-a',
+    px:845, py:265, w:230, d:100, h:7, entries:[[828,210],[867,320],[728,312],[970,241]],
+    tour:['Frontis Aula Magna','Aula Magna','Edificio A'],
+    desc:'Edificio emblemático del casco histórico neogótico, con la Torre del Reloj y el Aula Magna. Su fachada da a la plaza de Calle Agustín Edwards, sobre la escalinata que baja al Acceso Av. España; al sur está el Patio Central.' },
+  { id:'B', name:'Edificio B', sub:'Claustro · Piscina', cat:'historico', style:'gothic-court',
+    px:1010, py:565, w:330, d:190, h:6, entries:[[970,468],[1038,434],[1049,661],[848,631],[1173,500]],
+    tour:['Edificio B','Edificio B - Química','Patio Interior'],
+    desc:'Claustro histórico entre Calle Quezada Acharán y el Patio Central. En su patio interior está la Piscina Universitaria.' },
+  { id:'PIS', name:'Piscina Universitaria', icon:'🏊', cat:'deportivo', style:'pool',
+    px:1000, py:550, w:100, d:44, entries:[[970,468],[1038,434]],
+    tour:['Piscina'],
+    desc:'Piscina en el patio interior del Edificio B, rodeada de jardines. Se entra por el Edificio B desde el Patio Central.' },
+  { id:'C', name:'Edificio C', sub:'Talleres', cat:'historico', style:'talleres',
+    px:1219, py:751, w:580, d:175, h:6, entries:[[1183,662],[940,864],[1254,840]],
+    tour:['Edificio C','Edificio C - LEMCO','Calle Talleres'],
+    desc:'Nave histórica de los Talleres con techumbre en diente de sierra, entre Calle Quezada Acharán y Calle Talleres (junto a Av. Los Placeres).' },
+  { id:'D', name:'Edificio D', sub:'Comedor / Casino y Arquitectura', cat:'moderno', style:'modern',
+    px:690, py:480, w:220, d:110, h:6, entries:[[800,436],[666,420],[714,539]],
+    desc:'Comedor y Casino universitario, y dependencias de Arquitectura. Junto al Patio Central y Calle Carlos Van Buren, unido al Edificio E.' },
+  { id:'E', name:'Edificio E', sub:'Ex Internado', cat:'historico', style:'gothic-pav',
+    px:575, py:395, w:200, d:60, h:5, entries:[[561,359],[589,431],[676,354],[474,436]],
+    tour:['Edificio E'],
+    desc:'Pabellón histórico del antiguo Internado. Forma, con F2 y F, la herradura que rodea el Patio de los Cañones.' },
+  { id:'F', name:'Edificio F', sub:'Ex Pensionado', cat:'historico', style:'gothic-pav',
+    px:445, py:240, w:320, d:60, h:5, entries:[[459,276],[430,204]],
+    tour:['Edificio F','Edificio F - Informática'],
+    desc:'Pabellón histórico del antiguo Pensionado, a lo largo de Calle Agustín Edwards. Cierra por el lado del mar el Patio de los Cañones.' },
+  { id:'F2', name:'Edificio F2', sub:'Ala conectora E – F', cat:'historico', style:'gothic-pav',
+    px:624, py:271, w:30, d:133, h:5, entries:[[604,279]],
+    tour:['Edificio F2'],
+    desc:'Ala que une el Edificio F con el Edificio E, junto al Edificio A, y cierra el Patio de los Cañones.' },
+  { id:'H', name:'Edificio H', sub:'Casa Rector', cat:'historico', style:'chalet',
+    px:1200, py:50, w:100, d:60, h:4, entries:[[1214,86]],
+    tour:['Museo Institucional'],
+    desc:'Casona histórica de la Casa Rector, en la ladera bajo la Cancha de Fútbol. En este sector OpenStreetMap ubica el Museo Institucional UTFSM.' },
+  { id:'I', name:'Edificio I', sub:'Portería Acceso Av. España', cat:'servicios', style:'modern',
+    px:905, py:28, w:40, d:30, h:3, entries:[[885,46]],
+    tour:['Acceso Campus'],
+    desc:'Portería del Acceso Av. España, al pie de la escalinata que sube a la plaza del Edificio A. Junto al Tótem 1.' },
+  { id:'J', name:'Edificio J', cat:'moderno', style:'modern',
+    px:952, py:972, w:16, d:24, h:4, entries:[[962,962]],
+    desc:'Edificio angosto en la esquina de Subida San Luis con Av. Los Placeres, al inicio de Calle Talleres.' },
+  { id:'K', name:'Edificio K', sub:'CIAC', cat:'moderno', style:'modern',
+    px:835, py:830, w:60, d:60, h:6, entries:[[821,794],[868,820],[799,845]],
+    desc:'CIAC · Centro Integrado de Aprendizaje en Ciencias Básicas. En el borde de Subida San Luis, entre los edificios Q y O, junto a Calle Quezada Acharán y a pasos del Tótem 2.' },
+  { id:'L', name:'Edificio L', cat:'moderno', style:'modern',
+    px:1275, py:330, w:30, d:140, h:4, entries:[[1252,340]],
+    desc:'Pabellón alargado en el borde de la Cancha de Fútbol, frente a Calle Carlos Edwards.' },
+  { id:'M', name:'Edificio M', cat:'moderno', style:'mrt',
+    px:1772, py:283, w:75, d:165, h:8, entries:[[1728,300],[1806,368]],
+    desc:'Bloque moderno junto a Pasaje Valdés (mismo lenguaje que R y T). Acceso accesible por la rampa desde Calle Carlos Edwards.' },
+  { id:'M2', name:'Edificio M2', sub:'Gimnasio 2', cat:'moderno', style:'modern',
+    px:1655, py:265, w:90, d:80, h:5, entries:[[1673,310]],
+    desc:'Gimnasio 2, entre la Cancha de Fútbol y el Edificio M.' },
+  { id:'MAT', name:'Edificio Matta', sub:'Ingeniería en Diseño', cat:'moderno', style:'modern', outside:true,
+    px:1866, py:861, w:50, d:130, h:6, entries:[[1898,849]],
+    tour:['Edificio Matta - IDP','Acceso Edificio Matta - IDP'],
+    desc:'Edificio de Ingeniería en Diseño, fuera del recinto: cruzando Av. Los Placeres, por Av. Matta.' },
+  { id:'N', name:'Edificio N', cat:'moderno', style:'modern', rot:23,
+    px:728, py:598, w:18, d:18, h:3, entries:[[742,597]],
+    desc:'Pequeño edificio en el empalme de Calle Carlos Van Buren con Subida San Luis.' },
+  { id:'O', name:'Edificio O', cat:'moderno', style:'modern',
+    px:712, py:665, w:25, d:50, h:4, entries:[[683,677],[741,654]],
+    desc:'Edificio angosto junto a Subida San Luis, entre el Edificio K y el Edificio N.' },
+  { id:'P', name:'Edificio P', sub:'P1 · P2', cat:'moderno', style:'parts', outside:true,
+    px:1355, py:990, w:140, d:200, h:7, entries:[[1322,908]],
+    parts:[[-45,-82,45,-12,7],[45,-82,72,-45,5],[-35,-12,32,60,8],[-62,88,32,106,3]],
+    desc:'Bloque P (P1 y P2 conectados, planta escalonada) al otro lado de Av. Los Placeres, entre San Guillermo y San Luis.' },
+  { id:'Q', name:'Edificio Q', cat:'moderno', style:'modern',
+    px:882, py:888, w:18, d:22, h:3, entries:[[895,880]],
+    desc:'Pequeño edificio junto a Subida San Luis, entre el Edificio J y el Edificio K - CIAC.' },
+  { id:'R', name:'Edificio R', cat:'moderno', style:'mrt',
+    px:1745, py:618, w:70, d:70, h:7, entries:[[1729,577]],
+    desc:'Bloque moderno junto a Av. Los Placeres (mismo lenguaje que M y T), al lado de la Cancha Multiuso, el Sansanito y el Edificio R2.' },
+  { id:'R2', name:'Edificio R2', cat:'moderno', style:'modern',
+    px:1638, py:545, w:30, d:26, h:3, entries:[[1656,541]],
+    desc:'Módulo anexo del Edificio R, junto al Sansanito y el Tótem 3.' },
+  { id:'SAN', name:'Sansanito', icon:'✚', cat:'servicios', style:'kiosk',
+    px:1668, py:605, w:60, d:55, h:3, entries:[[1655,571]],
+    desc:'Sansanito: punto de atención entre el Edificio R, la Cancha Multiuso y Av. Los Placeres, a pasos del Tótem 3.' },
+  { id:'T', name:'Edificio T', cat:'moderno', style:'mrt', rot:-55,
+    px:135, py:390, w:70, d:45, h:5, entries:[[165,410]],
+    desc:'Bloque moderno del extremo poniente, junto a Calle Agustín Edwards y la bajada a Av. España (mismo lenguaje que M y R).' },
+  { id:'U', name:'Edificio U', sub:'Biblioteca', cat:'moderno', style:'modern',
+    px:1045, py:290, w:75, d:140, h:6, entries:[[1001,308],[1089,272]],
+    tour:['Biblioteca'],
+    desc:'Biblioteca, entre el Edificio A y Calle Carlos Edwards.' },
+  { id:'CM', name:'Cancha Multiuso', icon:'🏀', cat:'deportivo', style:'multi',
+    px:1812, py:500, w:120, d:200, entries:[[1747,526]],
+    tour:['Cancha Deportiva'],
+    desc:'Canchas multiuso junto al Edificio R y el Sansanito, entre Calle Quezada Acharán y Av. Los Placeres.' },
+  { id:'C11', name:'Cancha de Fútbol', sub:'CED USM · 11x11', icon:'⚽', cat:'deportivo', style:'field',
+    px:1409, py:241, w:234, d:373, entries:[[1470,425],[1283,252]],
+    tour:['Cancha de Fútbol','Tribuna'],
+    desc:'Cancha de fútbol 11x11 (CED USM), rodeada de áreas verdes, entre Calle Carlos Edwards, el Edificio L y el Gimnasio 2.' },
+  { id:'TEN', name:'Cancha de Tenis', icon:'🎾', cat:'deportivo', style:'tennis', rot:30,
+    px:420, py:482, w:105, d:62, entries:[[452,530]],
+    desc:'Cancha de tenis entre los edificios D / E y Subida San Luis, sobre Calle Carlos Van Buren.' },
+  { id:'PC', name:'Patio Central', icon:'▦', cat:'espacio', style:'plaza',
+    px:847, py:420, w:105, d:165, entries:[[847,420]],
+    tour:['Patio Central'],
+    desc:'Plaza abierta entre los edificios A, B y D, con jardineras simétricas. Une los principales flujos peatonales del casco histórico.' },
+  { id:'PCA', name:'Patio de los Cañones', icon:'🌳', cat:'espacio', style:'garden',
+    px:465, py:335, w:330, d:110, entries:[[381,369],[534,307]],
+    tour:['Patio del Cañón'],
+    desc:'Jardines geométricos con senderos simétricos, enmarcados por los edificios E, F2 y F. En su centro está el cañón histórico.' },
+];
+PLACES.forEach(p => { p.rot ??= ROT; p.interior = null; /* Fase 2: { floors: [{ n, name, rooms: [] }] } */ });
 
-export const CAMPUS = { LEVELS, BAND, OUTLINE, CATS, TOUR, STREETS, PLACES, TOTEMS, NODES, EDGES,
-  SCALE: 0.5, M_PER_UNIT: 1.2, ORIGIN: { px: 370, py: 250 } };
+/* ---------- Volúmenes de contexto dentro del campus (sin etiqueta) ---------- */
+const DECOR = [
+  { name:'Gimnasio 1', style:'gothic-pav', px:940, py:376, w:80, d:140, h:6, rot:ROT },
+  { name:'Gimnasio 3', style:'modern', px:1010, py:185, w:50, d:55, h:4, rot:ROT },
+  { name:'Sansamed', style:'modern', px:1628, py:690, w:40, d:40, h:3, rot:ROT },
+];
+
+/* ---------- Áreas verdes y plazas (polígonos o rectángulos girados) ---------- */
+const GREENS = [
+  { name:'Ladera de Av. España', kind:'park', poly:[[160,470],[205,330],[250,240],[380,160],[560,95],[700,60],[900,10],[1250,-15],[1500,-10],[1520,40],[1230,90],[1082,125],[1040,95],[900,138],[780,178],[700,182],[640,122],[560,108],[420,162],[300,205],[228,262],[198,330],[200,420],[215,480]] },
+  { name:'Patio de los Cañones', kind:'garden', rect:[465,335,330,110] },
+  { name:'Entorno CED', kind:'park', rect:[1395,250,330,430] },
+  { name:'Franja verde Carlos Edwards', kind:'park', poly:[[1100,130],[1230,95],[1250,250],[1330,470],[1290,470],[1180,330]] },
+  { name:'Jardín Edificio T', kind:'park', poly:[[160,330],[205,330],[200,430],[150,470],[110,420]] },
+  { name:'Jardín Cancha de Tenis', kind:'park', poly:[[230,500],[330,520],[480,560],[500,470],[340,440],[300,420],[240,420]] },
+];
+const PLAZAS = [
+  { name:'Patio Central', rect:[847,420,105,165] },
+  { name:'Plaza Edificio A', rect:[836,196,110,26] },
+  { name:'Acceso Av. España', rect:[870,60,90,42] },
+  { name:'Descanso escalinata', rect:[850,104,56,30] },
+];
+
+export const CAMPUS = { ROT, TERRAIN, OUTLINE, CATS, TOUR, STREETS, PATHS, TOTEMS, PLACES, DECOR, GREENS, PLAZAS,
+  SCALE: 0.13, M_PER_UNIT: 2.15, ORIGIN: { px: 1000, py: 480 } };
 export default CAMPUS;

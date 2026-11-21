@@ -33,31 +33,24 @@
     <h2><span class="num">1</span>¿En qué tótem estás?</h2>
     <div class="totems" id="totemBtns"></div>
   </div>
+  <div class="sec">
+    <div class="switch-row" id="accRow">
+      <div><b>♿ Ruta accesible</b><small>Sin escaleras · solo por la red interna</small></div>
+      <button id="accToggle" class="switch" role="switch" aria-checked="false" aria-label="Ruta accesible"><span></span></button>
+    </div>
+  </div>
   <div class="sec grow">
     <h2><span class="num">2</span>¿A dónde vas?</h2>
     <div class="search">
       <span aria-hidden="true">🔎</span>
-      <input id="search" type="search" placeholder="Buscar edificio o cancha…" autocomplete="off">
+      <input id="search" type="search" placeholder="Escribe el edificio: A, C, Piscina…" enterkeyhint="go" autocomplete="off">
       <button id="clearSearch" aria-label="Borrar búsqueda">✕</button>
     </div>
-    <div class="cats" id="cats" role="tablist" aria-label="Categorías"></div>
-    <div class="letters" id="letters"></div>
     <div class="list" id="destList"></div>
+    <div class="letters" id="letters"></div>
   </div>
-  <footer>Prototipo Fase 1 · Trazados y posiciones referenciales basados en el plano del campus. Validar en terreno.</footer>
 </aside>
 <button id="panelToggle" aria-label="Mostrar u ocultar panel">◀</button>
-
-<!-- Leyenda -->
-<div id="legend">
-  <span><i style="background:#a8462c"></i>Histórico</span>
-  <span><i style="background:#4f6584"></i>Moderno</span>
-  <span><i style="background:#1f9d55"></i>Deportivo</span>
-  <span><i style="background:#d62839"></i>Federación</span>
-  <span><i style="background:#c9ced6"></i>Calle</span>
-  <span><i style="background:#f6f2e8;border:1px solid #c9ced6"></i>Sendero</span>
-  <span><i style="background:#f08a24"></i>Escalera</span>
-</div>
 
 <!-- Tarjeta de información de lugar -->
 <section id="infoCard" class="card hidden" aria-live="polite">
