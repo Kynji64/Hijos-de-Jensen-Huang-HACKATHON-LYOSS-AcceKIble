@@ -7,7 +7,7 @@ Prototipo (Fase 1) para la Hackathon LYOSS USM 2026: mapa 3D interactivo del cam
 ```text
 ├── index.html                    # Estructura HTML, importmap de Three.js e interfaz de usuario
 ├── css/
-│   └── style.css                 # Estilos de la interfaz, tarjetas, etiquetas 3D y vista móvil
+│   └── styles.css                 # Estilos de la interfaz, tarjetas, etiquetas 3D y vista móvil
 ├── js/
 │   ├── main.js                   # Escena 3D (Three.js), controles, ruta animada y lógica de UI
 │   ├── data/
