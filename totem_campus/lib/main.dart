@@ -6,7 +6,8 @@ import 'package:web/web.dart' as web;
 import 'panel_info.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Rutas de los dos mapas.
+// Rutas de los dos mapas (dentro de la carpeta web/).
+// Cuando sus compañeros entreguen los mapas, solo cambien estas dos líneas.
 // ─────────────────────────────────────────────────────────────
 const String rutaMapaGeneral = 'mapa/index.html';
 const String rutaMapaAccesible = 'mapa_accesible/index.html';
@@ -39,16 +40,17 @@ class PantallaPrincipal extends StatefulWidget {
 }
 
 class _PantallaPrincipalState extends State<PantallaPrincipal> {
+  // Ancho del panel derecho (se cambia arrastrando la barrita del medio)
   double _anchoPanel = 380;
   static const double _anchoMin = 280;
   static const double _anchoMax = 600;
 
+  // Modo del mapa: false = general, true = movilidad reducida
   bool _modoAccesible = false;
 
   void _cambiarModo(bool accesible) {
     if (accesible == _modoAccesible) return;
     setState(() => _modoAccesible = accesible);
-    Mapa3D.cargar(accesible ? rutaMapaAccesible : rutaMapaGeneral);
   }
 
   @override
@@ -75,11 +77,11 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                   ),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: const Mapa3D(),
+                child: Mapa3D(accesible: _modoAccesible),
               ),
             ),
 
-            // Barrita para cambiar el tamaño del panel
+            // ── Barrita para cambiar el tamaño del panel ──
             MouseRegion(
               cursor: SystemMouseCursors.resizeColumn,
               child: GestureDetector(
@@ -108,7 +110,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               ),
             ),
 
-            // la columna derecha
+            // ── Columna derecha: selector de modo + panel de info ──
             SizedBox(
               width: _anchoPanel,
               child: Column(
@@ -132,7 +134,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 }
 
-/// TIPO de MAPA
+/// Dos botones grandes para elegir el tipo de mapa.
 class SelectorModo extends StatelessWidget {
   final bool accesible;
   final ValueChanged<bool> onCambio;
@@ -206,38 +208,46 @@ class _BotonModo extends StatelessWidget {
   }
 }
 
-/// MAPA DEL HTML CHAVALIN
+/// Muestra un mapa HTML de la carpeta web/ (solo funciona en web).
+/// Cada modo usa su propio iframe: al cambiar, el anterior se destruye y libera memoria.
 class Mapa3D extends StatelessWidget {
-  const Mapa3D({super.key});
+  final bool accesible;
+  const Mapa3D({super.key, this.accesible = false});
 
   static bool _registrado = false;
-  static web.HTMLIFrameElement? _iframe;
+  static web.HTMLIFrameElement? _iframeActual;
 
-  /// camnio del mapa
-  static void cargar(String ruta) {
-    _iframe?.src = ruta;
+  static void _registrar() {
+    if (_registrado) return;
+    final mapas = {
+      'mapa-general': rutaMapaGeneral,
+      'mapa-accesible': rutaMapaAccesible,
+    };
+    mapas.forEach((tipo, ruta) {
+      ui_web.platformViewRegistry.registerViewFactory(tipo, (int id) {
+        final iframe = web.HTMLIFrameElement()
+          ..src = ruta
+          ..style.border = 'none'
+          ..style.width = '100%'
+          ..style.height = '100%';
+        _iframeActual = iframe;
+        return iframe;
+      });
+    });
+    _registrado = true;
   }
 
-  
-  /// en NECESITO AYUDA, bloquea el fondo !!!!!!
+  /// Mientras se arrastra la barrita o hay un diálogo abierto,
+  /// el iframe no debe "robarse" el mouse.
   static void bloquearEventos(bool bloquear) {
-    _iframe?.style.setProperty('pointer-events', bloquear ? 'none' : 'auto');
+    _iframeActual?.style.setProperty('pointer-events', bloquear ? 'none' : 'auto');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_registrado) {
-      ui_web.platformViewRegistry.registerViewFactory('mapa-3d', (int id) {
-        final iframe = web.HTMLIFrameElement()
-          ..src = rutaMapaGeneral
-          ..style.border = 'none'
-          ..style.width = '100%'
-          ..style.height = '100%';
-        _iframe = iframe;
-        return iframe;
-      });
-      _registrado = true;
-    }
-    return const HtmlElementView(viewType: 'mapa-3d');
+    _registrar();
+    final tipo = accesible ? 'mapa-accesible' : 'mapa-general';
+    // La key distinta obliga a Flutter a destruir el iframe viejo y crear uno nuevo
+    return HtmlElementView(key: ValueKey(tipo), viewType: tipo);
   }
 }

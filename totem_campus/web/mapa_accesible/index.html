@@ -1,6 +1,114 @@
 <!doctype html>
 <html lang="es">
-<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font-family:sans-serif;background:#E3F4EA;color:#145A32">
-  <h1>Mapa de movilidad reducida · en construcción</h1>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Campus sin barreras · USM</title>
+<meta name="description" content="Mapa 3D interactivo y enrutamiento accesible para el campus Casa Central UTFSM (Hackathon LYOSS USM 2026).">
+<link rel="stylesheet" href="./css/styles.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="scene"></div>
+
+<!-- Barra superior -->
+<header id="topbar">
+  <div class="brand">
+    <div class="logo">USM</div>
+    <div><h1>Campus sin barreras</h1><small>Casa Central · Valparaíso</small></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="here"><div class="dot"></div><span id="hereTxt">Estás en: —</span></div>
+  <div class="clock" id="clock">--:--</div>
+</header>
+
+<!-- Panel lateral retráctil -->
+<aside id="panel" aria-label="Panel de navegación">
+  <div class="sec">
+    <h2><span class="num">1</span>¿En qué tótem estás?</h2>
+    <div class="totems" id="totemBtns"></div>
+  </div>
+  <div class="sec grow">
+    <h2><span class="num">2</span>¿A dónde vas?</h2>
+    <div class="search">
+      <span aria-hidden="true">🔎</span>
+      <input id="search" type="search" placeholder="Escribe el edificio: A, C, Piscina…" enterkeyhint="go" autocomplete="off">
+      <button id="clearSearch" aria-label="Borrar búsqueda">✕</button>
+    </div>
+    <div class="list" id="destList"></div>
+    <div class="letters" id="letters"></div>
+  </div>
+</aside>
+<button id="panelToggle" aria-label="Mostrar u ocultar panel">◀</button>
+
+<!-- Tarjeta de información de lugar -->
+<section id="infoCard" class="card hidden" aria-live="polite">
+  <button class="x" id="icClose" aria-label="Cerrar">✕</button>
+  <div class="ic-head">
+    <div class="ic-badge" id="icBadge">A</div>
+    <div><div class="ic-cat" id="icCat"></div><h3 id="icName"></h3></div>
+  </div>
+  <div class="chips" id="icChips"></div>
+  <p id="icDesc"></p>
+  <button class="primary" id="icGo">➜ Cómo llegar aquí</button>
+  <button class="tour-btn" id="icTour">🌐 Ver interior y accesos en Tour 360° USM</button>
+  <button class="ghost" id="icFocus">Centrar en el mapa</button>
+</section>
+
+<!-- Tarjeta de ruta -->
+<section id="routeCard" class="card hidden" aria-live="polite">
+  <div class="rc-top">
+    <div class="rc-title"><small id="rcFrom"></small><b id="rcTo"></b></div>
+    <div class="rc-stats">
+      <div><b id="rcDist">–</b><small>metros</small></div>
+      <div><b id="rcTime">–</b><small>min aprox.</small></div>
+      <div><b id="rcStairs">–</b><small id="rcStairsLbl">escaleras</small></div>
+    </div>
+    <div class="rc-actions">
+      <button id="rcSteps">Pasos</button>
+      <button id="rcTour" aria-label="Ver destino en Tour 360°">🌐 360°</button>
+      <button id="rcSpeak" aria-label="Repetir instrucciones por voz">🔁 Repetir</button>
+      <button id="rcClose" aria-label="Cerrar ruta">✕</button>
+    </div>
+  </div>
+  <div id="rcNote" class="rc-note"></div>
+  <ol id="rcList" class="rc-list hidden"></ol>
+</section>
+
+<!-- Controles del mapa -->
+<div id="mapCtrls">
+  <button id="zoomIn" aria-label="Acercar">＋</button>
+  <button id="zoomOut" aria-label="Alejar">－</button>
+  <button id="resetView" aria-label="Vista inicial">⟲<small>Inicio</small></button>
+  <button id="topView" aria-label="Vista superior">⬒<small>Planta</small></button>
+  <button id="autoRot" aria-label="Rotación automática">↻<small>Girar</small></button>
+  <button id="bigText" aria-label="Texto grande">A+<small>Texto</small></button>
+  <button id="voiceBtn" aria-label="Activar guía por voz para accesibilidad" aria-pressed="false">🔊<small>Voz</small></button>
+  <button id="contrastBtn" aria-label="Activar modo alto contraste" aria-pressed="false">◐<small>Contraste</small></button>
+</div>
+<div id="toast"></div>
+
+<!-- Visor Tour 360° USM (se carga solo al abrirlo) -->
+<div id="tourModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="tourTitle">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div><small>Tour 360° USM · Casa Central</small><h3 id="tourTitle">Casa Central Valparaíso</h3></div>
+      <a id="tourOpen" class="tour-ext" href="https://tour360.usm.cl/casa-central-valparaiso/" target="_blank" rel="noopener">↗ Abrir en pestaña nueva</a>
+      <button class="x" id="tourClose" aria-label="Cerrar tour">✕</button>
+    </div>
+    <div class="tour-scenes" id="tourScenes"></div>
+    <div class="tour-frame-wrap">
+      <div id="tourLoading" class="tour-loading">Cargando recorrido 360°… Si no aparece, usa “Abrir en pestaña nueva”.</div>
+      <iframe id="tourFrame" title="Tour virtual 360° Casa Central USM" allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer"referrerpolicy="no-referrer-when-downgrade"></iframe>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./js/main.js"></script>
 </body>
 </html>

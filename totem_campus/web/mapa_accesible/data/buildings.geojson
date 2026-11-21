@@ -1,0 +1,30 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "edificio-a",
+        "name": "Edificio A",
+        "category": "aulas",
+        "floors": 3,
+        "height": 14,
+        "base_height": 0,
+        "color": "#2563eb",
+        "description": "Salas de clases y oficinas."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-71.5963, -33.0348],
+            [-71.5956, -33.0348],
+            [-71.5956, -33.0343],
+            [-71.5963, -33.0343],
+            [-71.5963, -33.0348]
+          ]
+        ]
+      }
+    }
+  ]
+}
