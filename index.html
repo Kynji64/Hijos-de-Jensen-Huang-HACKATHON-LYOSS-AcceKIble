@@ -1,0 +1,1202 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Campus sin barreras · USM</title>
+<meta name="description" content="Mapa 3D interactivo y enrutamiento accesible para el campus Casa Central UTFSM (Hackathon LYOSS USM 2026).">
+<!--
+  =====================================================================
+   CAMPUS SIN BARRERAS · UTFSM Casa Central (Valparaíso)
+   Hackathon LYOSS USM 2026 · MVP Fase 1 (rutas exteriores)
+  ---------------------------------------------------------------------
+   Archivo único autocontenido: Three.js r160 vía CDN (importmap).
+   Ábrelo directamente en el navegador o sírvelo con cualquier servidor
+   estático.  Parámetros de URL útiles (para QR / tótems físicos):
+     ?totem=T1|T2|T3   fija el tótem de origen
+     ?dest=C           abre la ruta hacia un destino (id del lugar)
+     ?acc=1            activa el modo Ruta accesible
+  ---------------------------------------------------------------------
+   Estructura del script:
+     1. Datos (polígono del recinto, terrazas, lugares, grafo peatonal)
+     2. Escena 3D (terreno por niveles, edificios, canchas, contexto)
+     3. Grafo + Dijkstra (con modo accesible sin escaleras)
+     4. Dibujo animado de la ruta
+     5. Interfaz táctil (panel, tarjetas, buscador, voz, inactividad)
+  =====================================================================
+-->
+<style>
+  :root{
+    --navy:#0b2545; --navy2:#13315c; --navy3:#1d4477; --line:rgba(255,255,255,.12);
+    --blue:#2a5bd7; --yellow:#ffc72c; --red:#d62839; --green:#1f9d55; --teal:#14b8a6;
+    --orange:#f08a24; --text:#ffffff; --muted:#b9c8de; --radius:18px;
+    --panel:rgba(11,37,69,.95);
+    font-size:16px;
+  }
+  html.big{font-size:19px}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:#dfe7f1;color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  button{font:inherit;color:inherit;cursor:pointer;border:0;background:none}
+  #scene{position:fixed;inset:0}
+  #scene canvas{display:block;touch-action:none}
+  .labels{position:absolute;inset:0;pointer-events:none}
+
+  /* ---------- Barra superior ---------- */
+  #topbar{position:fixed;top:12px;left:12px;right:12px;height:64px;display:flex;align-items:center;gap:14px;
+    padding:0 12px 0 10px;background:var(--panel);border-radius:var(--radius);box-shadow:0 10px 30px rgba(11,37,69,.25);z-index:20}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .logo{width:46px;height:46px;border-radius:12px;background:var(--yellow);color:var(--navy);display:grid;place-items:center;font-weight:900;letter-spacing:.5px;font-size:.95rem;flex:none}
+  .brand h1{margin:0;font-size:1.15rem;line-height:1.1;white-space:nowrap}
+  .brand small{color:var(--muted);font-size:.8rem;white-space:nowrap}
+  .spacer{flex:1}
+  .here{display:flex;align-items:center;gap:10px;background:var(--navy2);border:1px solid var(--line);border-radius:14px;padding:8px 14px;min-width:0}
+  .here .dot{width:12px;height:12px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(214,40,57,.7);animation:pulse 1.8s infinite;flex:none}
+  .here span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:.95rem}
+  .clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:1.25rem;padding:0 6px}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(214,40,57,.7)}70%{box-shadow:0 0 0 12px rgba(214,40,57,0)}100%{box-shadow:0 0 0 0 rgba(214,40,57,0)}}
+
+  /* ---------- Panel lateral ---------- */
+  #panel{position:fixed;top:88px;left:12px;bottom:12px;width:390px;display:flex;flex-direction:column;
+    background:var(--panel);border-radius:var(--radius);box-shadow:0 10px 30px rgba(11,37,69,.3);z-index:15;
+    transition:transform .35s cubic-bezier(.2,.8,.2,1);overflow-x:hidden;overflow-y:auto}
+  body.collapsed #panel{transform:translateX(calc(-100% - 24px))}
+  #panelToggle{position:fixed;top:100px;left:414px;z-index:16;width:44px;height:64px;border-radius:0 14px 14px 0;
+    background:var(--panel);display:grid;place-items:center;font-size:1.3rem;transition:left .35s cubic-bezier(.2,.8,.2,1);box-shadow:6px 6px 18px rgba(11,37,69,.25)}
+  body.collapsed #panelToggle{left:0}
+  .sec{padding:16px 18px;border-bottom:1px solid var(--line)}
+  .sec.grow{flex:1;display:flex;flex-direction:column;min-height:0;border-bottom:0}
+  .sec h2{margin:0 0 12px;font-size:1.05rem;display:flex;align-items:center;gap:10px}
+  .num{width:28px;height:28px;border-radius:50%;background:var(--yellow);color:var(--navy);display:grid;place-items:center;font-weight:900;font-size:.9rem;flex:none}
+  .totems{display:grid;gap:8px}
+  .totem-btn{display:grid;grid-template-columns:48px 1fr;grid-template-rows:auto auto;align-items:center;column-gap:12px;text-align:left;
+    padding:10px 12px;min-height:64px;border-radius:14px;background:var(--navy2);border:2px solid transparent;transition:.15s}
+  .totem-btn b{grid-row:1/3;width:48px;height:48px;border-radius:12px;background:var(--navy3);display:grid;place-items:center;font-size:1.3rem}
+  .totem-btn span{font-weight:700}
+  .totem-btn small{color:var(--muted);font-size:.82rem}
+  .totem-btn.active{border-color:var(--yellow);background:#1a3d6e}
+  .totem-btn.active b{background:var(--red)}
+  .totem-btn:active{transform:scale(.98)}
+
+  .switch-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;border-radius:14px;background:var(--navy2);cursor:pointer;border:2px solid transparent}
+  .switch-row.on{border-color:var(--teal);background:#0f3f4d}
+  .switch-row b{display:block;font-size:1.08rem}
+  .switch-row small{color:var(--muted);font-size:.82rem}
+  .switch{width:72px;height:40px;border-radius:40px;background:#3b5272;position:relative;flex:none;transition:.2s}
+  .switch span{position:absolute;top:4px;left:4px;width:32px;height:32px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+  .switch[aria-checked="true"]{background:var(--teal)}
+  .switch[aria-checked="true"] span{left:36px}
+
+  .search{display:flex;align-items:center;gap:8px;background:#fff;border-radius:14px;padding:0 6px 0 14px;height:54px;flex:none}
+  .search input{flex:1;border:0;outline:0;font:inherit;font-size:1.05rem;color:var(--navy);background:transparent;min-width:0}
+  .search button{width:42px;height:42px;border-radius:10px;color:var(--navy);font-size:1.1rem}
+  .letters{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin:12px 0 4px;flex:none}
+  .letters button{height:50px;border-radius:12px;background:var(--navy2);font-weight:800;font-size:1.15rem;border:2px solid transparent}
+  .letters button:active,.letters button.sel{border-color:var(--yellow);background:#1a3d6e}
+  .subhead{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 2px 6px}
+  .list{overflow:auto;flex:1;min-height:150px;margin:0 -6px;padding:0 6px 6px;-webkit-overflow-scrolling:touch}
+  .dest{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:10px 12px;border-radius:14px;min-height:60px;margin-bottom:6px;background:rgba(255,255,255,.04);border:2px solid transparent}
+  .dest:active,.dest.sel{border-color:var(--yellow);background:#1a3d6e}
+  .dest .bdg{width:42px;height:42px;border-radius:11px;display:grid;place-items:center;font-weight:900;flex:none;font-size:1rem}
+  .dest .t{flex:1;min-width:0}
+  .dest .t b{display:block;font-size:1rem}
+  .dest .t small{color:var(--muted);font-size:.8rem}
+  .dest .go{font-size:1.3rem;color:var(--yellow)}
+  .empty{color:var(--muted);padding:16px 4px}
+  #panel footer{padding:10px 18px;font-size:.72rem;color:var(--muted);border-top:1px solid var(--line)}
+
+  /* ---------- Tarjetas ---------- */
+  .card{position:fixed;background:var(--panel);border-radius:var(--radius);box-shadow:0 14px 40px rgba(11,37,69,.35);z-index:18;transition:transform .3s cubic-bezier(.2,.8,.2,1),opacity .3s}
+  .hidden{display:none!important}
+  #infoCard{top:88px;right:88px;width:350px;padding:18px}
+  .x{position:absolute;top:10px;right:10px;width:44px;height:44px;border-radius:12px;background:var(--navy2);font-size:1.1rem}
+  .ic-head{display:flex;gap:14px;align-items:center;padding-right:44px}
+  .ic-badge{width:58px;height:58px;border-radius:16px;display:grid;place-items:center;font-weight:900;font-size:1.4rem;flex:none}
+  .ic-cat{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  .ic-head h3{margin:2px 0 0;font-size:1.3rem;line-height:1.15}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+  .chip{font-size:.78rem;padding:5px 10px;border-radius:20px;background:var(--navy2);border:1px solid var(--line)}
+  #icDesc{color:#dde6f3;line-height:1.45;font-size:.95rem;margin:10px 0 16px}
+  .primary{width:100%;height:64px;border-radius:16px;background:var(--yellow);color:var(--navy);font-weight:900;font-size:1.15rem;display:flex;align-items:center;justify-content:center;gap:10px}
+  .primary:active{transform:scale(.98)}
+  .ghost{width:100%;height:50px;border-radius:14px;margin-top:8px;background:var(--navy2);font-weight:600}
+
+  #routeCard{left:416px;right:88px;bottom:12px;padding:14px 16px;max-height:52vh;display:flex;flex-direction:column}
+  body.collapsed #routeCard{left:12px}
+  .rc-top{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .rc-title{flex:1;min-width:200px}
+  .rc-title small{color:var(--muted);display:block;font-size:.85rem}
+  .rc-title b{font-size:1.2rem}
+  .rc-stats{display:flex;gap:8px}
+  .rc-stats div{background:var(--navy2);border-radius:12px;padding:8px 14px;text-align:center;min-width:86px}
+  .rc-stats b{display:block;font-size:1.45rem;font-variant-numeric:tabular-nums;color:var(--yellow)}
+  .rc-stats small{font-size:.72rem;color:var(--muted)}
+  body.acc .rc-stats b{color:#5eead4}
+  .rc-actions{display:flex;gap:8px}
+  .rc-actions button{height:56px;min-width:56px;padding:0 14px;border-radius:14px;background:var(--navy2);font-weight:700;font-size:1rem}
+  .rc-actions button.on{background:var(--yellow);color:var(--navy)}
+  .rc-note{margin-top:10px;padding:10px 12px;border-radius:12px;font-size:.92rem;line-height:1.35}
+  .rc-note.warn{background:rgba(240,138,36,.18);border:1px solid rgba(240,138,36,.6)}
+  .rc-note.ok{background:rgba(20,184,166,.16);border:1px solid rgba(20,184,166,.6)}
+  .rc-list{margin:10px 0 0;padding:0;list-style:none;overflow:auto;-webkit-overflow-scrolling:touch}
+  .rc-list li{display:flex;gap:12px;align-items:center;padding:9px 6px;border-bottom:1px solid var(--line);font-size:1rem}
+  .rc-list li i{font-style:normal;width:40px;height:40px;border-radius:12px;background:var(--navy2);display:grid;place-items:center;flex:none;font-size:1.15rem}
+  .rc-list li.warn i{background:rgba(240,138,36,.35)}
+  .rc-list li.ramp i{background:rgba(42,140,224,.4)}
+
+  /* ---------- Controles de mapa ---------- */
+  #mapCtrls{position:fixed;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:14}
+  #mapCtrls button{width:62px;height:62px;border-radius:16px;background:var(--panel);font-size:1.35rem;font-weight:800;box-shadow:0 6px 18px rgba(11,37,69,.25)}
+  #mapCtrls button.on{background:var(--yellow);color:var(--navy)}
+  #mapCtrls button small{display:block;font-size:.58rem;font-weight:600;margin-top:2px}
+  @media (max-height:760px) and (min-width:861px){
+    .sec{padding:10px 14px} .totem-btn{min-height:52px;padding:6px 10px} .totem-btn b{width:40px;height:40px}
+    .letters button{height:42px} .sec h2{margin-bottom:8px}
+  }
+  #legend{position:fixed;top:88px;left:468px;display:flex;gap:14px;flex-wrap:wrap;align-items:center;z-index:12;
+    background:rgba(255,255,255,.88);color:var(--navy);padding:8px 14px;border-radius:14px;font-size:.8rem;font-weight:600;box-shadow:0 4px 14px rgba(11,37,69,.12);transition:left .35s}
+  body.collapsed #legend{left:56px}
+  #legend span{display:flex;align-items:center;gap:6px}
+  #legend i{width:22px;height:8px;border-radius:4px;display:inline-block}
+  #toast{position:fixed;left:50%;top:92px;transform:translateX(-50%) translateY(-20px);background:var(--navy);padding:12px 20px;border-radius:14px;font-weight:600;opacity:0;transition:.3s;z-index:30;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  /* ---------- Etiquetas 3D (HTML) ---------- */
+  .lbl{width:max-content;pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:7px;padding:4px 10px 4px 4px;border-radius:12px;
+    background:rgba(11,37,69,.92);color:#fff;font-size:12.5px;font-weight:600;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.25);
+    border:2px solid transparent;transform:translateY(-6px);transition:border-color .2s, background .2s}
+  .lbl .b{min-width:24px;height:24px;padding:0 5px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:12px}
+  .lbl.sel{border-color:var(--yellow);background:#163a6a}
+  .lbl.dest{border-color:var(--red)}
+  body.far .lbl .n{display:none}
+  body.far .lbl{padding:4px}
+  .lbl.court .b{font-size:13px}
+  .tlbl{width:max-content;pointer-events:auto;cursor:pointer;background:var(--yellow);color:var(--navy);font-weight:900;font-size:12px;padding:4px 9px;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.25);white-space:nowrap}
+  .tlbl.here{background:var(--red);color:#fff;font-size:13px;padding:6px 11px}
+  .street{color:#4b5b6e;font-weight:800;font-size:12px;letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;text-shadow:0 1px 0 rgba(255,255,255,.7)}
+  .street.sea{color:#2d5f8a}
+
+  /* ---------- Pantallas angostas (móvil vía QR) ---------- */
+  @media (max-width:860px){
+    #topbar{height:56px} .brand small,.clock{display:none} .logo{width:40px;height:40px}
+    .here span{max-width:44vw;font-size:.85rem}
+    #panel{top:auto;left:0;right:0;bottom:0;width:auto;height:62vh;border-radius:22px 22px 0 0}
+    body.collapsed #panel{transform:translateY(calc(100% - 0px))}
+    #panelToggle{top:auto;bottom:calc(62vh + 8px);left:50%;transform:translateX(-50%);width:84px;height:40px;border-radius:14px}
+    body.collapsed #panelToggle{left:50%;bottom:12px}
+    #legend{display:none}
+    #infoCard{top:76px;left:12px;right:12px;width:auto}
+    #routeCard{left:12px;right:12px;top:76px;bottom:auto;max-height:60vh}
+    body.collapsed #routeCard{left:12px}
+    #mapCtrls{top:auto;bottom:calc(62vh + 60px);transform:none}
+    body.collapsed #mapCtrls{bottom:64px}
+    #mapCtrls button{width:50px;height:50px;font-size:1.1rem}
+    #mapCtrls button small{display:none}
+    .rc-stats div{min-width:70px;padding:6px 10px}
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="scene"></div>
+
+<!-- Barra superior -->
+<header id="topbar">
+  <div class="brand">
+    <div class="logo">USM</div>
+    <div><h1>Campus sin barreras</h1><small>Casa Central · Valparaíso</small></div>
+  </div>
+  <div class="spacer"></div>
+  <div class="here"><div class="dot"></div><span id="hereTxt">Estás en: —</span></div>
+  <div class="clock" id="clock">--:--</div>
+</header>
+
+<!-- Panel lateral retráctil -->
+<aside id="panel" aria-label="Panel de navegación">
+  <div class="sec">
+    <h2><span class="num">1</span>¿En qué tótem estás?</h2>
+    <div class="totems" id="totemBtns"></div>
+  </div>
+  <div class="sec">
+    <div class="switch-row" id="accRow">
+      <div><b>♿ Ruta accesible</b><small>Evita escaleras · usa rampas y pendientes suaves</small></div>
+      <button id="accToggle" class="switch" role="switch" aria-checked="false" aria-label="Ruta accesible"><span></span></button>
+    </div>
+  </div>
+  <div class="sec grow">
+    <h2><span class="num">2</span>¿A dónde vas?</h2>
+    <div class="search">
+      <span aria-hidden="true">🔎</span>
+      <input id="search" type="search" placeholder="Buscar edificio o cancha…" autocomplete="off">
+      <button id="clearSearch" aria-label="Borrar búsqueda">✕</button>
+    </div>
+    <div class="letters" id="letters"></div>
+    <div class="list" id="destList"></div>
+  </div>
+  <footer>Prototipo Fase 1 · Trazados y posiciones referenciales basados en el plano del campus. Validar en terreno.</footer>
+</aside>
+<button id="panelToggle" aria-label="Mostrar u ocultar panel">◀</button>
+
+<!-- Leyenda -->
+<div id="legend">
+  <span><i style="background:#2a5bd7"></i>Académico</span>
+  <span><i style="background:#1f9d55"></i>Deportivo</span>
+  <span><i style="background:#d62839"></i>Federación</span>
+  <span><i style="background:#f6f2e8;border:1px solid #c9ced6"></i>Camino</span>
+  <span><i style="background:#f08a24"></i>Escalera</span>
+  <span><i style="background:#2a8ce0"></i>Rampa</span>
+</div>
+
+<!-- Tarjeta de información de lugar -->
+<section id="infoCard" class="card hidden" aria-live="polite">
+  <button class="x" id="icClose" aria-label="Cerrar">✕</button>
+  <div class="ic-head">
+    <div class="ic-badge" id="icBadge">A</div>
+    <div><div class="ic-cat" id="icCat"></div><h3 id="icName"></h3></div>
+  </div>
+  <div class="chips" id="icChips"></div>
+  <p id="icDesc"></p>
+  <button class="primary" id="icGo">➜ Cómo llegar aquí</button>
+  <button class="ghost" id="icFocus">Centrar en el mapa</button>
+</section>
+
+<!-- Tarjeta de ruta -->
+<section id="routeCard" class="card hidden" aria-live="polite">
+  <div class="rc-top">
+    <div class="rc-title"><small id="rcFrom"></small><b id="rcTo"></b></div>
+    <div class="rc-stats">
+      <div><b id="rcDist">–</b><small>metros</small></div>
+      <div><b id="rcTime">–</b><small>min aprox.</small></div>
+      <div><b id="rcStairs">–</b><small id="rcStairsLbl">escaleras</small></div>
+    </div>
+    <div class="rc-actions">
+      <button id="rcSteps">Pasos</button>
+      <button id="rcSpeak" aria-label="Escuchar indicaciones">🔊</button>
+      <button id="rcClose" aria-label="Cerrar ruta">✕</button>
+    </div>
+  </div>
+  <div id="rcNote" class="rc-note"></div>
+  <ol id="rcList" class="rc-list hidden"></ol>
+</section>
+
+<!-- Controles del mapa -->
+<div id="mapCtrls">
+  <button id="zoomIn" aria-label="Acercar">＋</button>
+  <button id="zoomOut" aria-label="Alejar">－</button>
+  <button id="resetView" aria-label="Vista inicial">⟲<small>Inicio</small></button>
+  <button id="topView" aria-label="Vista superior">⬒<small>Planta</small></button>
+  <button id="autoRot" aria-label="Rotación automática">↻<small>Girar</small></button>
+  <button id="bigText" aria-label="Texto grande">A+<small>Texto</small></button>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =====================================================================
+   1. DATOS
+   Todas las coordenadas están en PÍXELES del plano adjunto (≈611×457),
+   así es fácil corregirlas mirando la imagen. toWorld() las convierte.
+   ===================================================================== */
+const SCALE = 0.5;            // unidades 3D por píxel del plano
+const M_PER_UNIT = 1.2;       // 1 unidad 3D ≈ 1,2 m  (≈ 0,6 m por píxel)
+const ORIGIN = { px: 370, py: 250 };
+const toWorld = (px, py) => new THREE.Vector2((px - ORIGIN.px) * SCALE, (py - ORIGIN.py) * SCALE);
+
+/* Terrazas del campus (niveles). Altura h en unidades 3D. */
+const LEVELS = [
+  { name: 'Nivel bajo',  sub: 'Av. España · A · E · H · T',      h: 0.6, top: 0xe3e9dc },
+  { name: 'Nivel medio', sub: 'Terraza B · U · D · Cancha 11x11', h: 4.6, top: 0xe8ede1 },
+  { name: 'Nivel alto',  sub: 'Av. Placeres · C · R · K · P',     h: 8.6, top: 0xeef2e8 },
+];
+const BAND = { highMax: 222, midMax: 340 };     // límites en py entre terrazas
+const levelOfPy = py => (py < BAND.highMax ? 2 : py < BAND.midMax ? 1 : 0);
+
+/* Polígono del recinto (línea roja del plano). */
+const OUTLINE = [
+  [205,62],[236,58],[240,112],[262,132],[300,133],[337,128],[340,58],[358,45],[376,58],[380,118],
+  [402,132],[440,140],[458,150],[464,200],[470,232],[466,262],[492,276],[540,290],[576,320],[600,355],
+  [608,390],[590,406],[520,414],[432,434],[332,410],[318,398],[305,362],[200,362],[190,330],[185,292],
+  [160,266],[150,240],[140,216],[130,204],[150,180],[170,160],[185,140],[205,120]
+];
+
+/* Categorías visuales */
+const CATS = {
+  academico:  { label: 'Edificio académico',     css: '#2a5bd7', body: 0xe4eaf4, roof: 0x5b7fc7 },
+  deportivo:  { label: 'Espacio deportivo',      css: '#1f9d55' },
+  federacion: { label: 'Federación / Servicios', css: '#d62839', body: 0xfde7a8, roof: 0xd62839 },
+};
+
+/* Lugares (destinos). w,d = ancho/fondo en px; h = altura del volumen (unid.).
+   entries = nodos del grafo que sirven como acceso (se elige el más cercano).
+   Las descripciones son referenciales: reemplazar con información oficial. */
+const PLACES = [
+  { id:'A',  name:'Edificio A',  cat:'academico', px:385, py:360, w:80, d:30, h:14, entries:['l_as','l_x'],
+    desc:'Edificio académico de la terraza baja, frente a los jardines y al acceso de Av. España. Accesos por su fachada sur y por el pasaje oriente.' },
+  { id:'B',  name:'Edificio B',  cat:'academico', px:392, py:252, w:100, d:46, h:12, court:true, entries:['m_b','m_bw'],
+    desc:'Edificio con patio interior en la terraza media, al sur del Edificio C. Se accede desde la Plaza central o por su costado poniente.' },
+  { id:'C',  name:'Edificio C',  cat:'academico', px:358, py:183, w:160, d:62, h:11, entries:['h_c','h_cn'],
+    desc:'El volumen de mayor superficie del campus, en el nivel alto junto a Av. Placeres. Accesos por el frente sur y por el norte (lado San Luis).' },
+  { id:'D',  name:'Edificio D',  cat:'academico', px:468, py:312, w:52, d:46, h:12, entries:['m_d','m_be'],
+    desc:'Edificio del sector oriente de la terraza media, junto a la Plaza central. Conecta con la rampa oriente hacia el nivel bajo.' },
+  { id:'E',  name:'Edificio E',  cat:'academico', px:482, py:385, w:76, d:46, h:10, court:true, entries:['l_ew','l_ee','l_3'],
+    desc:'Edificio con patio central y jardines en el nivel bajo, cercano al Tótem de Av. España.' },
+  { id:'F',  name:'Edificio F',  cat:'academico', px:455, py:200, w:14, d:30, h:8, entries:['h_e'],
+    desc:'Edificio menor en el borde oriente del nivel alto. Junto a él nace la rampa oriente hacia la terraza media.' },
+  { id:'H',  name:'Edificio H',  cat:'academico', px:290, py:348, w:30, d:14, h:6, entries:['l_h'],
+    desc:'Edificio bajo ubicado al sur de la Cancha 11x11, en la bajada hacia Av. España. Se llega por la rampa poniente.' },
+  { id:'K',  name:'Edificio K',  cat:'academico', px:248, py:158, w:22, d:26, h:8, entries:['h_k'],
+    desc:'Edificio del nivel alto entre el Edificio R y el Edificio C, cercano al acceso San Luis.' },
+  { id:'M',  name:'Edificio M',  cat:'academico', px:170, py:235, w:24, d:46, h:10, entries:['m_m'],
+    desc:'Edificio del sector poniente. Desde el Tótem 3 se baja por escalera; en modo accesible se rodea por la rampa poniente.' },
+  { id:'M2', name:'Edificio M2', cat:'academico', px:200, py:252, w:18, d:22, h:7, entries:['m_m2'],
+    desc:'Edificio contiguo al Edificio M, al poniente de la Cancha 11x11.' },
+  { id:'P',  name:'Edificio P',  cat:'academico', px:352, py:108, w:26, d:34, h:12, entries:['h_p'],
+    desc:'Edificio del extremo norte, junto a la Entrada San Luis (Tótem 2).' },
+  { id:'P2', name:'Edificio P2', cat:'academico', px:356, py:72, w:22, d:24, h:8, entries:['h_p2'],
+    desc:'Edificio contiguo al Edificio P, en el extremo norte del recinto.' },
+  { id:'R',  name:'Edificio R',  cat:'academico', px:205, py:152, w:36, d:28, h:9, entries:['h_r'],
+    desc:'Edificio del sector alto poniente, junto al Tótem 3 y a la Cancha Multiuso.' },
+  { id:'T',  name:'Edificio T',  cat:'academico', px:572, py:378, w:34, d:16, h:8, rot:-38, entries:['l_t'],
+    desc:'Edificio del extremo oriente del nivel bajo, en la bajada hacia Av. España.' },
+  { id:'U',  name:'Edificio U',  cat:'academico', px:346, py:322, w:30, d:76, h:12, entries:['m_u','m_w3'],
+    desc:'Edificio alargado de la terraza media, entre la Cancha 11x11 y la Plaza central.' },
+  { id:'CM', name:'Cancha Multiuso', icon:'🏀', code:'8013', cat:'deportivo', kind:'multi', px:220, py:195, w:34, d:26, entries:['h_8013'],
+    desc:'Cancha multiuso del sector poniente (sector 8013 del plano), entre los edificios M y R.' },
+  { id:'C11', name:'Cancha de Fútbol 11x11', icon:'⚽', code:'8007', cat:'deportivo', kind:'field', px:255, py:262, w:66, d:80, entries:['m_8007','m_w4'],
+    desc:'Cancha de fútbol 11x11 (sector 8007 del plano), al oriente de los edificios M y M2 y sobre el Edificio H.' },
+  { id:'FED', name:'Casa de la Federación', short:'FEUTFSM', icon:'★', cat:'federacion', kind:'house', px:160, py:200, w:16, d:14, h:4.5, entries:['h_fed'],
+    desc:'Casa de la Federación de Estudiantes (FEUTFSM), pequeña edificación junto al Edificio M, a pasos del Tótem 3.' },
+];
+
+/* Tótems (puntos de origen) */
+const TOTEMS = [
+  { id:'T1', n:1, name:'Entrada Av. España', short:'Av. España' },
+  { id:'T2', n:2, name:'Entrada San Luis',   short:'San Luis' },
+  { id:'T3', n:3, name:'Entre Edificio M y R', short:'Sector M–R' },
+];
+
+/* Nodos del grafo peatonal: [px, py, etiqueta opcional usada en las indicaciones].
+   Prefijos: h_ = nivel alto, m_ = nivel medio, l_ = nivel bajo. */
+const NODES = {
+  T1:[420,426,'el Tótem 1'], T2:[325,138,'el Tótem 2'], T3:[180,178,'el Tótem 3'],
+  // nivel alto
+  h_t2:[328,150,'el acceso San Luis'], h_p:[352,132], h_p2b:[374,110], h_p2:[374,76],
+  h_cn:[358,146,'el acceso norte del Edificio C'], h_ne:[446,148], h_e:[452,218,'el Edificio F'],
+  h_q1:[268,140], h_k:[248,140], h_q3:[230,140], h_q2:[230,176], h_q4:[242,180],
+  h_r:[212,172], h_8013:[220,178,'la Cancha Multiuso'], h_fed:[172,200],
+  h_st3:[185,216], h_w:[250,212], h_1:[268,218,'la esquina poniente del Edificio C'],
+  h_r4t:[300,218], h_st2:[330,218], h_c:[358,218,'el frente sur del Edificio C'],
+  // nivel medio
+  m_st2:[330,240], m_r4:[305,248], m_8007:[292,262,'la Cancha 11x11'], m_bw:[338,252],
+  m_j:[328,279], m_b:[392,281,'el acceso sur del Edificio B'], m_c:[400,305,'la Plaza central'],
+  m_u:[364,320], m_d:[439,312], m_x:[434,332], m_be:[448,283], m_r3:[455,268],
+  m_dne:[500,284], m_de:[500,315], m_w3:[312,318,'el pasaje poniente del Edificio U'],
+  m_w4:[250,312], m_w5:[205,288], m_m2:[188,268], m_m:[185,238,'el Edificio M'],
+  // nivel bajo
+  l_rl:[318,356], l_h:[309,346], l_sw:[340,388], l_as:[385,384,'la fachada sur del Edificio A'],
+  l_x:[434,352], l_ew:[436,385], l_1:[434,414,'los jardines de Av. España'],
+  l_3:[482,416], l_4:[534,408], l_t:[552,394], l_r2:[545,368], l_ee:[524,386],
+};
+
+/* Tramos: [nodoA, nodoB, tipo]  p = camino plano · s = escalera · r = rampa */
+const EDGES = [
+  // nivel alto
+  ['T2','h_t2','p'],['h_t2','h_p','p'],['h_p','h_cn','p'],['h_t2','h_cn','p'],['h_p','h_p2b','p'],['h_p2b','h_p2','p'],
+  ['h_cn','h_ne','p'],['h_ne','h_e','p'],['h_t2','h_q1','p'],['h_q1','h_k','p'],['h_k','h_q3','p'],['h_q3','h_q2','p'],
+  ['h_q2','h_q4','p'],['h_q2','h_r','p'],['h_q2','h_8013','p'],['h_r','h_8013','p'],['h_r','T3','p'],['T3','h_fed','p'],
+  ['T3','h_st3','p'],['h_q4','h_w','p'],['h_st3','h_w','p'],['h_w','h_1','p'],['h_q1','h_1','p'],['h_1','h_r4t','p'],
+  ['h_r4t','h_st2','p'],['h_st2','h_c','p'],['h_c','h_e','p'],
+  // cambios de nivel: escaleras
+  ['h_st2','m_st2','s'],['h_st3','m_m','s'],['m_x','l_x','s'],
+  // cambios de nivel: rampas / pendientes suaves
+  ['h_r4t','m_r4','r'],['h_e','m_r3','r'],['m_w3','l_rl','r'],['m_de','l_r2','r'],
+  // nivel medio
+  ['m_st2','m_r4','p'],['m_st2','m_bw','p'],['m_r4','m_8007','p'],['m_r4','m_w3','p'],['m_bw','m_j','p'],['m_j','m_b','p'],
+  ['m_j','m_w3','p'],['m_b','m_c','p'],['m_c','m_u','p'],['m_c','m_d','p'],['m_c','m_x','p'],['m_d','m_x','p'],
+  ['m_b','m_be','p'],['m_be','m_c','p'],['m_r3','m_be','p'],['m_be','m_dne','p'],['m_dne','m_de','p'],
+  ['m_w3','m_w4','p'],['m_w4','m_w5','p'],['m_w5','m_m2','p'],['m_m2','m_m','p'],
+  // nivel bajo
+  ['l_rl','l_h','p'],['l_rl','l_sw','p'],['l_sw','l_as','p'],['l_as','l_1','p'],['T1','l_as','p'],['T1','l_1','p'],
+  ['l_x','l_ew','p'],['l_ew','l_1','p'],['l_1','l_3','p'],['l_3','l_4','p'],['l_4','l_t','p'],['l_t','l_r2','p'],
+  ['l_r2','l_ee','p'],['l_ee','l_4','p'],
+];
+
+/* Parámetros de caminata */
+const WALK_SPEED = 1.25;        // m/s peatón estándar
+const WALK_SPEED_ACC = 0.85;    // m/s silla de ruedas / movilidad reducida
+const STAIR_EXTRA_S = 20;       // s adicionales por tramo de escalera
+const STAIR_PENALTY = 6;        // costo extra (unid.) para no preferir escaleras por pocos metros
+const IDLE_RESET_MS = 120000;   // reinicio del tótem tras 2 min sin uso
+
+/* =====================================================================
+   2. ESCENA 3D
+   ===================================================================== */
+const container = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.className = 'labels';
+container.appendChild(labelRenderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdfe7f1);
+scene.fog = new THREE.Fog(0xdfe7f1, 520, 1150);
+
+const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 1, 3000);
+const HOME = { target: new THREE.Vector3(0, 2, 2), position: new THREE.Vector3(-70, 205, 225) };
+camera.position.copy(HOME.position);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.copy(HOME.target);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.minDistance = 35;
+controls.maxDistance = 560;
+controls.maxPolarAngle = 1.32;
+controls.screenSpacePanning = false;
+controls.autoRotateSpeed = 0.6;
+
+// Luces estilo maqueta
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa9bb, 1.5));
+const sun = new THREE.DirectionalLight(0xffffff, 2.3);
+sun.position.set(-130, 230, 120);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -190, right: 190, top: 190, bottom: -190, near: 10, far: 600 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+// Helpers de materiales y geometría
+const mat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.88, metalness: 0, ...extra });
+const wp = (px, py, y = 0) => { const v = toWorld(px, py); return new THREE.Vector3(v.x, y, v.y); };
+
+function addLabel(obj3d, html, cls, onClick) {
+  const div = document.createElement('div');
+  div.className = cls;
+  div.innerHTML = html;
+  if (onClick) div.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+  const lbl = new CSS2DObject(div);
+  obj3d.add(lbl);
+  return lbl;
+}
+
+/* ---------- Suelo, calles y contexto urbano ---------- */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400), mat(0xd3dbe4));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.05; ground.receiveShadow = true;
+scene.add(ground);
+
+function flatRect(px0, py0, px1, py1, color, y) {
+  const a = toWorld(px0, py0), b = toWorld(px1, py1);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(b.x - a.x), Math.abs(b.y - a.y)), mat(color));
+  m.rotation.x = -Math.PI / 2; m.position.set((a.x + b.x) / 2, y, (a.y + b.y) / 2); m.receiveShadow = true;
+  scene.add(m); return m;
+}
+flatRect(-500, 446, 1200, 470, 0x99a4b0, 0.02);   // Av. España
+flatRect(-500, 474, 1200, 492, 0x8f877a, 0.02);   // línea férrea
+for (const py of [479, 487]) flatRect(-500, py, 1200, py + 1.2, 0x4a4540, 0.04);
+flatRect(-500, 500, 1200, 1600, 0x77acd6, 0.0);   // borde costero
+flatRect(-60, 112, 660, 124, 0xb3bcc6, 0.03);     // Av. Placeres
+flatRect(316, -200, 328, 112, 0xb3bcc6, 0.03);    // Calle San Luis
+const streetLbl = (txt, px, py, cls = 'street') => { const o = new THREE.Object3D(); o.position.copy(wp(px, py, 1)); scene.add(o); addLabel(o, txt, cls); };
+streetLbl('Av. España', 330, 458); streetLbl('Línea férrea', 640, 483); streetLbl('Océano Pacífico', 330, 540, 'street sea');
+streetLbl('Av. Placeres', 520, 118); streetLbl('San Luis', 322, 20);
+
+// Manzanas vecinas (volúmenes bajos y neutros para dar escala)
+const CONTEXT_LOTS = [
+  [20,0,200,104],[240,0,312,104],[384,0,470,104],[480,0,640,108],[472,150,520,232],[530,140,650,255],
+  [560,258,660,300],[60,128,135,174],[30,180,122,232],[20,236,138,282],[40,286,172,330],[40,336,182,370],[60,374,292,402],
+];
+{
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const cm = mat(0xc6cfd9);
+  const inst = new THREE.InstancedMesh(geo, cm, 900);
+  let i = 0; const dummy = new THREE.Object3D();
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (const [x0, y0, x1, y1] of CONTEXT_LOTS) {
+    const cell = 13;
+    for (let px = x0 + 2; px < x1 - 4; px += cell) for (let py = y0 + 2; py < y1 - 4; py += cell) {
+      if (rnd() < 0.18 || i >= 900) continue;
+      const w = Math.min(cell - 2, x1 - px - 2), d = Math.min(cell - 2, y1 - py - 2), h = 1.5 + rnd() * 5;
+      const c = toWorld(px + w / 2, py + d / 2);
+      dummy.position.set(c.x, h / 2, c.y); dummy.scale.set(w * SCALE, h, d * SCALE); dummy.updateMatrix();
+      inst.setMatrixAt(i++, dummy.matrix);
+    }
+  }
+  inst.count = i; inst.castShadow = true; inst.receiveShadow = true;
+  scene.add(inst);
+}
+
+/* ---------- Terrazas del campus (topografía básica) ---------- */
+// Recorta el polígono del recinto a una franja horizontal [ymin, ymax] (Sutherland–Hodgman)
+function clipBand(poly, ymin, ymax) {
+  const atY = (a, b, y) => [a[0] + (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]), y];
+  const clip = (pts, keep, y) => {
+    const out = [];
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length], ia = keep(a), ib = keep(b);
+      if (ia) out.push(a);
+      if (ia !== ib) out.push(atY(a, b, y));
+    }
+    return out;
+  };
+  return clip(clip(poly, p => p[1] >= ymin, ymin), p => p[1] <= ymax, ymax);
+}
+const wallMat = mat(0xaeb8c3);
+[[BAND.midMax, 9999, 0], [BAND.highMax, BAND.midMax, 1], [-9999, BAND.highMax, 2]].forEach(([y0, y1, lv]) => {
+  const pts = clipBand(OUTLINE, y0, y1);
+  const shape = new THREE.Shape(pts.map(([px, py]) => { const v = toWorld(px, py); return new THREE.Vector2(v.x, -v.y); }));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: LEVELS[lv].h, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2);
+  const slab = new THREE.Mesh(geo, [mat(LEVELS[lv].top), wallMat]);
+  slab.receiveShadow = true; slab.castShadow = true;
+  scene.add(slab);
+});
+
+/* ---------- Edificios, canchas y casa de la federación ---------- */
+const pickables = [];           // mallas clicables
+const placeObjs = {};           // id -> { place, meshes, label, top }
+
+function courtTexture(kind) {
+  const c = document.createElement('canvas'), g = c.getContext('2d');
+  if (kind === 'field') {
+    c.width = 256; c.height = 320;
+    for (let i = 0; i < 10; i++) { g.fillStyle = i % 2 ? '#3f9b4f' : '#47a858'; g.fillRect(0, i * 32, 256, 32); }
+    g.strokeStyle = '#fff'; g.lineWidth = 3;
+    g.strokeRect(14, 14, 228, 292); g.beginPath(); g.moveTo(14, 160); g.lineTo(242, 160); g.stroke();
+    g.beginPath(); g.arc(128, 160, 30, 0, Math.PI * 2); g.stroke();
+    g.strokeRect(68, 14, 120, 46); g.strokeRect(68, 260, 120, 46);
+    g.strokeRect(100, 14, 56, 18); g.strokeRect(100, 288, 56, 18);
+  } else {
+    c.width = 256; c.height = 196;
+    g.fillStyle = '#2f6fb3'; g.fillRect(0, 0, 256, 196);
+    g.fillStyle = '#e07b39'; g.fillRect(18, 18, 220, 160);
+    g.strokeStyle = '#fff'; g.lineWidth = 3;
+    g.strokeRect(18, 18, 220, 160); g.beginPath(); g.moveTo(128, 18); g.lineTo(128, 178); g.stroke();
+    g.beginPath(); g.arc(128, 98, 24, 0, Math.PI * 2); g.stroke();
+    g.strokeRect(18, 68, 40, 60); g.strokeRect(198, 68, 40, 60);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+function box(w, h, d, material) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.castShadow = true; m.receiveShadow = true;
+  return m;
+}
+const edgeMat = new THREE.LineBasicMaterial({ color: 0x5a6b82, transparent: true, opacity: 0.45 });
+function withEdges(mesh) { mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), edgeMat)); return mesh; }
+
+function buildPlace(p) {
+  const lv = levelOfPy(p.py), base = LEVELS[lv].h;
+  const c = toWorld(p.px, p.py), W = p.w * SCALE, D = p.d * SCALE;
+  const group = new THREE.Group();
+  group.position.set(c.x, 0, c.y);
+  if (p.rot) group.rotation.y = THREE.MathUtils.degToRad(p.rot);
+  const meshes = [];
+  let top;
+
+  if (p.kind === 'field' || p.kind === 'multi') {
+    // Cancha: superficie texturizada + cerco bajo
+    const surf = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: courtTexture(p.kind), roughness: 0.95 }));
+    surf.rotation.x = -Math.PI / 2; surf.position.y = base + 0.06; surf.receiveShadow = true;
+    group.add(surf); meshes.push(surf);
+    const fence = new THREE.MeshStandardMaterial({ color: 0x2c3e50, transparent: true, opacity: 0.55 });
+    for (const [fw, fd, fx, fz] of [[W, 0.15, 0, -D / 2], [W, 0.15, 0, D / 2], [0.15, D, -W / 2, 0], [0.15, D, W / 2, 0]]) {
+      const f = new THREE.Mesh(new THREE.BoxGeometry(fw, 1.6, fd), fence); f.position.set(fx, base + 0.8, fz); group.add(f);
+    }
+    top = base + 3;
+  } else if (p.kind === 'house') {
+    // Casa con techo a dos aguas
+    const cat = CATS[p.cat];
+    const body = withEdges(box(W, p.h, D, mat(cat.body)));
+    body.position.y = base + p.h / 2;
+    const roofGeo = new THREE.CylinderGeometry(D * 0.62, D * 0.62, W * 1.06, 3);
+    roofGeo.rotateZ(Math.PI / 2); roofGeo.rotateX(-Math.PI / 2);
+    const roof = new THREE.Mesh(roofGeo, mat(cat.roof)); roof.castShadow = true;
+    roof.position.y = base + p.h + D * 0.28;
+    group.add(body, roof); meshes.push(body, roof);
+    top = base + p.h + D * 0.6;
+  } else {
+    // Edificio en bloque (o con patio interior). Nace en y=0 para "enterrarse" en la terraza.
+    const cat = CATS[p.cat];
+    const H = base + p.h;
+    const bodyMat = mat(cat.body), roofMat = mat(cat.roof);
+    const parts = p.court
+      ? (() => { const t = Math.min(W, D) * 0.3; return [[W, t, 0, -D / 2 + t / 2], [W, t, 0, D / 2 - t / 2], [t, D - 2 * t, -W / 2 + t / 2, 0], [t, D - 2 * t, W / 2 - t / 2, 0]]; })()
+      : [[W, D, 0, 0]];
+    for (const [pw, pd, ox, oz] of parts) {
+      const b = withEdges(box(pw, H, pd, bodyMat)); b.position.set(ox, H / 2, oz);
+      const r = box(pw * 0.98, 0.5, pd * 0.98, roofMat); r.position.set(ox, H + 0.25, oz);
+      group.add(b, r); meshes.push(b, r);
+    }
+    // fajas de "ventanas" para lectura de pisos
+    const floors = Math.max(1, Math.floor(p.h / 3.2));
+    const winMat = new THREE.MeshBasicMaterial({ color: 0x9fb3cf });
+    if (!p.court) for (let f = 0; f < floors; f++) {
+      const y = base + 1.6 + f * 3.2;
+      for (const s of [-1, 1]) {
+        const strip = new THREE.Mesh(new THREE.PlaneGeometry(W * 0.86, 0.7), winMat);
+        strip.position.set(0, y, s * (D / 2 + 0.03)); if (s < 0) strip.rotation.y = Math.PI; group.add(strip);
+      }
+    }
+    top = H + 0.5;
+  }
+
+  for (const m of meshes) { m.userData.placeId = p.id; pickables.push(m); }
+  scene.add(group);
+
+  // Etiqueta flotante HTML (siempre mira a la cámara por ser un elemento DOM)
+  const anchor = new THREE.Object3D(); anchor.position.set(0, top + 2.5, 0); group.add(anchor);
+  const cat = CATS[p.cat];
+  const badge = p.icon || p.id;
+  const label = addLabel(anchor,
+    `<span class="b" style="background:${cat.css}">${badge}</span><span class="n">${p.short || p.name}</span>`,
+    'lbl' + (p.kind ? ' court' : ''), () => selectPlace(p.id, true));
+  placeObjs[p.id] = { place: p, meshes, label, top, group, level: lv, center: new THREE.Vector3(c.x, base, c.y) };
+}
+PLACES.forEach(buildPlace);
+
+/* =====================================================================
+   3. GRAFO PEATONAL + DIJKSTRA
+   ===================================================================== */
+const G = { nodes: {}, adj: {}, edges: [] };
+for (const [id, [px, py, label]] of Object.entries(NODES)) {
+  const lv = levelOfPy(py);
+  G.nodes[id] = { id, px, py, label, level: lv, pos: wp(px, py, LEVELS[lv].h) };
+  G.adj[id] = [];
+}
+for (const [a, b, type] of EDGES) {
+  const A = G.nodes[a], B = G.nodes[b];
+  if (!A || !B) { console.warn('Tramo con nodo inexistente', a, b); continue; }
+  if (type === 'p' && A.level !== B.level) console.warn(`Tramo plano ${a}-${b} cruza niveles: debería ser escalera o rampa`);
+  if (type !== 'p' && A.level === B.level) console.warn(`Tramo ${a}-${b} marcado como ${type} pero no cambia de nivel`);
+  const len = A.pos.distanceTo(B.pos);
+  const e = { a, b, type, len, m: len * M_PER_UNIT };
+  G.edges.push(e);
+  G.adj[a].push({ to: b, e });
+  G.adj[b].push({ to: a, e });
+}
+
+/** Dijkstra desde un nodo. Si accessible=true se excluyen tramos con escalera. */
+function dijkstra(src, accessible) {
+  const dist = {}, prev = {}, prevE = {}, Q = new Set(Object.keys(G.nodes));
+  for (const k of Q) dist[k] = Infinity;
+  dist[src] = 0;
+  while (Q.size) {
+    let u = null, best = Infinity;
+    for (const k of Q) if (dist[k] < best) { best = dist[k]; u = k; }
+    if (u === null) break;
+    Q.delete(u);
+    for (const { to, e } of G.adj[u]) {
+      if (accessible && e.type === 's') continue;
+      const alt = dist[u] + e.len + (e.type === 's' ? STAIR_PENALTY : 0);
+      if (alt < dist[to]) { dist[to] = alt; prev[to] = u; prevE[to] = e; }
+    }
+  }
+  return { dist, prev, prevE };
+}
+
+/** Calcula la ruta desde un tótem al acceso más conveniente del lugar. */
+function computeRoute(totemId, placeId, accessible) {
+  const place = placeObjs[placeId].place;
+  const { dist, prev, prevE } = dijkstra(totemId, accessible);
+  let goal = null;
+  for (const en of place.entries) if (dist[en] < (goal ? dist[goal] : Infinity)) goal = en;
+  if (!goal) return null;
+  const nodes = [goal], edges = [];
+  while (nodes[0] !== totemId) { edges.unshift(prevE[nodes[0]]); nodes.unshift(prev[nodes[0]]); }
+  const meters = edges.reduce((s, e) => s + e.m, 0);
+  const stairs = edges.filter(e => e.type === 's').length;
+  const ramps = edges.filter(e => e.type === 'r').length;
+  const speed = accessible ? WALK_SPEED_ACC : WALK_SPEED;
+  const seconds = meters / speed + stairs * STAIR_EXTRA_S;
+  return { nodes, edges, meters, stairs, ramps, minutes: Math.max(1, Math.round(seconds / 60)), accessible, placeId, totemId };
+}
+
+/** Indicaciones paso a paso en lenguaje simple (también usadas por la voz). */
+function buildSteps(route) {
+  const steps = [];
+  const t = TOTEMS.find(x => x.id === route.totemId);
+  const place = placeObjs[route.placeId].place;
+  steps.push({ icon: '📍', text: `Inicio: Tótem ${t.n} · ${t.name} (${LEVELS[G.nodes[route.totemId].level].name.toLowerCase()}).` });
+  let acc = 0;
+  route.edges.forEach((e, i) => {
+    const from = G.nodes[route.nodes[i]], to = G.nodes[route.nodes[i + 1]], next = route.edges[i + 1];
+    if (e.type === 'p') {
+      acc += e.m;
+      if (!next || next.type !== 'p' || to.label) {
+        let tail = '';
+        if (next && next.type === 's') tail = ' hasta la escalera';
+        else if (next && next.type === 'r') tail = ' hasta la rampa';
+        else if (next && to.label) tail = ` hasta ${to.label}`;
+        if (acc >= 4) steps.push({ icon: '🚶', text: `Camina ${Math.round(acc)} m${tail}.` });
+        acc = 0;
+      }
+    } else {
+      const up = to.level > from.level, lvl = LEVELS[to.level].name.toLowerCase();
+      if (e.type === 's') {
+        const n = Math.round(Math.abs(to.pos.y - from.pos.y) * M_PER_UNIT / 0.17);
+        steps.push({ icon: '🪜', cls: 'warn', text: `${up ? 'Sube' : 'Baja'} la escalera (≈${n} peldaños) hasta el ${lvl}.` });
+      } else {
+        steps.push({ icon: '♿', cls: 'ramp', text: `Toma la rampa y ${up ? 'sube' : 'baja'} con pendiente suave hasta el ${lvl}.` });
+      }
+    }
+  });
+  steps.push({ icon: '🏁', text: `Llegaste a ${place.name}.` });
+  return steps;
+}
+
+/* ---------- Dibujo de la red peatonal sobre el terreno ---------- */
+const netGroup = new THREE.Group(); scene.add(netGroup);
+const pathMat = mat(0xf6f2e8), rampMat = mat(0x2a8ce0), stepA = mat(0xf08a24), stepB = mat(0xf7b267);
+function ribbon(a, b, width, material, thick = 0.14) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(width, thick, a.distanceTo(b)), material);
+  m.position.copy(a).add(b).multiplyScalar(0.5); m.lookAt(b); m.receiveShadow = true;
+  return m;
+}
+for (const e of G.edges) {
+  const A = G.nodes[e.a].pos.clone(), B = G.nodes[e.b].pos.clone();
+  A.y += 0.07; B.y += 0.07;
+  if (e.type === 'p') netGroup.add(ribbon(A, B, 2.2, pathMat));
+  else if (e.type === 'r') {
+    netGroup.add(ribbon(A, B, 2.8, rampMat, 0.35));
+    // barandas
+    const dir = B.clone().sub(A); const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize().multiplyScalar(1.5);
+    for (const s of [1, -1]) netGroup.add(ribbon(A.clone().add(side.clone().multiplyScalar(s)).setY(A.y + 1), B.clone().add(side.clone().multiplyScalar(s)).setY(B.y + 1), 0.18, mat(0xe8eef6), 0.18));
+  } else {
+    // Escalera: peldaños reales
+    const lo = A.y < B.y ? A : B, hi = A.y < B.y ? B : A;
+    const dir = new THREE.Vector3(hi.x - lo.x, 0, hi.z - lo.z); const L = dir.length(); dir.normalize();
+    const n = Math.max(8, Math.round((hi.y - lo.y) / 0.36)), ang = Math.atan2(dir.x, dir.z);
+    for (let i = 0; i < n; i++) {
+      const h = lo.y + (hi.y - lo.y) * (i + 1) / n;
+      const s = box(2.8, h, L / n + 0.02, i % 2 ? stepA : stepB);
+      const t = (i + 0.5) / n;
+      s.position.set(lo.x + dir.x * L * t, h / 2, lo.z + dir.z * L * t); s.rotation.y = ang;
+      netGroup.add(s);
+    }
+  }
+}
+// Discos en las uniones para suavizar esquinas
+const jointGeo = new THREE.CylinderGeometry(1.1, 1.1, 0.14, 16);
+for (const n of Object.values(G.nodes)) { const j = new THREE.Mesh(jointGeo, pathMat); j.position.copy(n.pos).setY(n.pos.y + 0.07); netGroup.add(j); }
+
+/* ---------- Árboles (vegetación estilizada, instanciada) ---------- */
+{
+  const inPoly = (x, y, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const segDist = (px, py, ax, ay, bx, by) => { const dx = bx - ax, dy = by - ay; const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy))); return Math.hypot(px - ax - t * dx, py - ay - t * dy); };
+  const free = (x, y) => {
+    if (!inPoly(x, y, OUTLINE)) return false;
+    if (Math.abs(y - BAND.highMax) < 5 || Math.abs(y - BAND.midMax) < 5) return false;
+    for (const p of PLACES) { const r = Math.max(p.w, p.d) * (p.rot ? 0.6 : 0.5); if (Math.abs(x - p.px) < (p.rot ? r : p.w / 2) + 4 && Math.abs(y - p.py) < (p.rot ? r : p.d / 2) + 4) return false; }
+    for (const e of G.edges) { const A = G.nodes[e.a], B = G.nodes[e.b]; if (segDist(x, y, A.px, A.py, B.px, B.py) < 6) return false; }
+    return true;
+  };
+  const MAX = 170;
+  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), mat(0x6fae6a, { flatShading: true }), MAX);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.25, 0.3, 1, 6), mat(0x8a6a4a), MAX);
+  crown.castShadow = trunk.castShadow = true;
+  let n = 0, seed = 42; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const d = new THREE.Object3D();
+  for (let k = 0; k < 6000 && n < MAX; k++) {
+    const x = 130 + rnd() * 480, y = 45 + rnd() * 390;
+    if (!free(x, y)) continue;
+    const base = LEVELS[levelOfPy(y)].h, s = 1.4 + rnd() * 1.4, v = toWorld(x, y);
+    d.position.set(v.x, base + 1.2, v.y); d.scale.set(1, 2.4, 1); d.rotation.set(0, 0, 0); d.updateMatrix(); trunk.setMatrixAt(n, d.matrix);
+    d.position.set(v.x, base + 2.4 + s * 0.8, v.y); d.scale.setScalar(s); d.rotation.y = rnd() * 3; d.updateMatrix(); crown.setMatrixAt(n, d.matrix);
+    n++;
+  }
+  crown.count = trunk.count = n;
+  scene.add(crown, trunk);
+}
+
+/* ---------- Tótems 3D ---------- */
+const totemObjs = {};
+for (const t of TOTEMS) {
+  const n = G.nodes[t.id];
+  const g = new THREE.Group(); g.position.copy(n.pos);
+  const pillar = box(1.6, 6, 0.9, mat(0x0b2545)); pillar.position.y = 3;
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.6), new THREE.MeshBasicMaterial({ color: 0xffc72c }));
+  screen.position.set(0, 4, 0.46);
+  const screen2 = screen.clone(); screen2.position.z = -0.46; screen2.rotation.y = Math.PI;
+  const ring = new THREE.Mesh(new THREE.RingGeometry(2.2, 3, 40), new THREE.MeshBasicMaterial({ color: 0xd62839, transparent: true, opacity: 0.0, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.2;
+  g.add(pillar, screen, screen2, ring);
+  pillar.userData.totemId = t.id; pickables.push(pillar);
+  scene.add(g);
+  const anchor = new THREE.Object3D(); anchor.position.y = 9; g.add(anchor);
+  const label = addLabel(anchor, `T${t.n} · ${t.short}`, 'tlbl', () => setOrigin(t.id));
+  totemObjs[t.id] = { g, ring, label };
+}
+
+/* =====================================================================
+   4. RUTA ANIMADA
+   ===================================================================== */
+const routeGroup = new THREE.Group(); scene.add(routeGroup);
+let routeAnim = null;   // { tex, curve, walker, length, t }
+
+function stripeTexture() {
+  const c = document.createElement('canvas'); c.width = 128; c.height = 8;
+  const g = c.getContext('2d');
+  g.fillStyle = '#b4b4b4'; g.fillRect(0, 0, 128, 8);
+  const grd = g.createLinearGradient(0, 0, 128, 0);
+  grd.addColorStop(0, 'rgba(255,255,255,0)'); grd.addColorStop(0.55, 'rgba(255,255,255,1)'); grd.addColorStop(0.7, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 8);
+  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+// Suaviza esquinas añadiendo puntos cerca de cada vértice antes de la Catmull-Rom
+function smoothPolyline(pts, r = 2.2) {
+  const out = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], p = pts[i], b = pts[i + 1];
+    const ra = Math.min(r, p.distanceTo(a) * 0.45), rb = Math.min(r, p.distanceTo(b) * 0.45);
+    out.push(p.clone().add(a.clone().sub(p).setLength(ra)), p.clone().add(b.clone().sub(p).setLength(rb)));
+  }
+  out.push(pts[pts.length - 1]);
+  return out;
+}
+function clearRouteMesh() {
+  routeGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { o.material.map?.dispose(); o.material.dispose(); } });
+  routeGroup.clear(); routeAnim = null;
+}
+function drawRoute(route) {
+  clearRouteMesh();
+  const color = route.accessible ? 0x14b8a6 : 0xffc72c;
+  const pts = route.nodes.map(id => G.nodes[id].pos.clone().add(new THREE.Vector3(0, 0.9, 0)));
+  const curve = new THREE.CatmullRomCurve3(smoothPolyline(pts), false, 'centripetal');
+  const length = curve.getLength();
+  const segs = Math.max(80, Math.floor(length * 2.5));
+  const tex = stripeTexture(); tex.repeat.set(length / 7, 1);
+  const core = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 0.6, 10), new THREE.MeshBasicMaterial({ color, map: tex }));
+  const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 1.5, 12), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.28, depthWrite: false }));
+  const walker = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1.9, 20, 14), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false }));
+  walker.add(halo);
+  routeGroup.add(core, glow, walker);
+  // Pin de destino
+  const po = placeObjs[route.placeId];
+  const pin = new THREE.Group();
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4.2, 24), mat(0xd62839, { emissive: 0x5a0a12 }));
+  cone.rotation.x = Math.PI; cone.position.y = 2.1;
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 14), mat(0xd62839, { emissive: 0x5a0a12 }));
+  ball.position.y = 4.6;
+  pin.add(cone, ball);
+  const pc = po.group.position;
+  pin.position.set(pc.x, po.top + 1, pc.z);
+  routeGroup.add(pin);
+  routeAnim = { tex, curve, walker, length, t: 0, pin, pinY: po.top + 1 };
+  return pts;
+}
+
+/* =====================================================================
+   5. ESTADO + INTERFAZ
+   ===================================================================== */
+const state = { origin: 'T1', accessible: false, selected: null, route: null, stepsOpen: false };
+const $ = id => document.getElementById(id);
+
+// Cámara: vuelo suave
+const tween = { active: false };
+function flyTo(target, position, dur = 1.1) {
+  Object.assign(tween, { active: true, t: 0, dur, fromT: controls.target.clone(), toT: target.clone(), fromP: camera.position.clone(), toP: position.clone() });
+}
+function flyToPoint(target, dist) {
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  if (dir.y < 0.45) { dir.y = 0.6; dir.normalize(); }
+  flyTo(target, target.clone().add(dir.multiplyScalar(dist)));
+}
+function fitPoints(pts) {
+  const b = new THREE.Box3().setFromPoints(pts), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+  const narrow = innerWidth < 860;
+  const dist = THREE.MathUtils.clamp(Math.max(s.x, s.z) * (narrow ? 2.0 : 1.35) + 55, 90, 420);
+  const dir = new THREE.Vector3(-0.28, 0.78, 0.56).normalize();
+  flyTo(c, c.clone().add(dir.multiplyScalar(dist)));
+}
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove('show'), 2400); }
+
+/* ---------- Origen (tótem) ---------- */
+function setOrigin(id, silent) {
+  state.origin = id;
+  const t = TOTEMS.find(x => x.id === id);
+  $('hereTxt').textContent = `Estás en: Tótem ${t.n} · ${t.name}`;
+  document.querySelectorAll('.totem-btn').forEach(b => b.classList.toggle('active', b.dataset.t === id));
+  for (const [tid, o] of Object.entries(totemObjs)) {
+    const here = tid === id;
+    o.label.element.className = 'tlbl' + (here ? ' here' : '');
+    o.label.element.textContent = here ? `📍 ESTÁS AQUÍ · T${TOTEMS.find(x => x.id === tid).n}` : `T${TOTEMS.find(x => x.id === tid).n} · ${TOTEMS.find(x => x.id === tid).short}`;
+    o.ring.material.opacity = here ? 0.8 : 0;
+  }
+  if (state.route) routeTo(state.route.placeId);
+  else if (!silent) { flyToPoint(G.nodes[id].pos, 120); toast(`Origen: Tótem ${t.n} · ${t.name}`); }
+}
+$('totemBtns').innerHTML = TOTEMS.map(t => {
+  const lv = LEVELS[G.nodes[t.id].level];
+  return `<button class="totem-btn" data-t="${t.id}"><b>${t.n}</b><span>${t.name}</span><small>${lv.name} · ${lv.sub}</small></button>`;
+}).join('');
+document.querySelectorAll('.totem-btn').forEach(b => b.addEventListener('click', () => setOrigin(b.dataset.t)));
+
+/* ---------- Modo accesible ---------- */
+function setAccessible(on) {
+  state.accessible = on;
+  $('accToggle').setAttribute('aria-checked', on);
+  $('accRow').classList.toggle('on', on);
+  document.body.classList.toggle('acc', on);
+  // resalta visualmente las escaleras como "no disponibles"
+  stepA.color.set(on ? 0x9aa3ad : 0xf08a24); stepB.color.set(on ? 0xb8c0c8 : 0xf7b267);
+  rampMat.emissive.set(on ? 0x0d3d66 : 0x000000);
+  if (state.route) routeTo(state.route.placeId);
+  else toast(on ? '♿ Ruta accesible activada: se evitarán escaleras' : 'Ruta estándar (más corta)');
+}
+$('accRow').addEventListener('click', () => setAccessible(!state.accessible));
+
+/* ---------- Lista de destinos y buscador ---------- */
+const norm = s => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const letterPlaces = PLACES.filter(p => !p.kind);
+$('letters').innerHTML = letterPlaces.map(p => `<button data-id="${p.id}" aria-label="${p.name}">${p.id}</button>`).join('');
+$('letters').querySelectorAll('button').forEach(b => b.addEventListener('click', () => { selectPlace(b.dataset.id, false); routeTo(b.dataset.id); }));
+
+function renderList() {
+  const q = norm($('search').value.trim());
+  const match = p => !q || norm(`${p.name} ${p.short || ''} ${p.id} ${p.code || ''} ${CATS[p.cat].label} ${p.kind === 'field' ? 'futbol' : ''} ${p.kind === 'multi' ? 'basquetbol voleibol' : ''} ${p.kind === 'house' ? 'feutfsm estudiantes' : ''}`).includes(q);
+  const groups = [
+    ['Deportes y espacios', PLACES.filter(p => p.kind && match(p))],
+    ['Edificios', PLACES.filter(p => !p.kind && match(p))],
+  ];
+  const html = groups.filter(g => g[1].length).map(([title, list]) => `<div class="subhead">${title}</div>` + list.map(p => {
+    const lv = LEVELS[placeObjs[p.id].level];
+    return `<button class="dest${state.selected === p.id ? ' sel' : ''}" data-id="${p.id}">
+      <span class="bdg" style="background:${CATS[p.cat].css}">${p.icon || p.id}</span>
+      <span class="t"><b>${p.name}</b><small>${CATS[p.cat].label} · ${lv.name}${p.code ? ' · Sector ' + p.code : ''}</small></span>
+      <span class="go">➜</span></button>`;
+  }).join('')).join('');
+  $('destList').innerHTML = html || `<div class="empty">Sin resultados para “${$('search').value}”.</div>`;
+  $('destList').querySelectorAll('.dest').forEach(b => b.addEventListener('click', () => { selectPlace(b.dataset.id, false); routeTo(b.dataset.id); }));
+}
+$('search').addEventListener('input', renderList);
+$('clearSearch').addEventListener('click', () => { $('search').value = ''; renderList(); });
+
+/* ---------- Selección de lugar + tarjeta ---------- */
+function setHighlight(id, on) {
+  const o = placeObjs[id]; if (!o) return;
+  o.label.element.classList.toggle('sel', on);
+  for (const m of o.meshes) if (m.material.emissive) m.material.emissive.set(on ? 0x3a3000 : 0x000000);
+}
+function selectPlace(id, fly = true) {
+  if (state.selected && state.selected !== id) setHighlight(state.selected, false);
+  state.selected = id;
+  setHighlight(id, true);
+  const o = placeObjs[id], p = o.place, cat = CATS[p.cat], lv = LEVELS[o.level];
+  $('icBadge').textContent = p.icon || p.id; $('icBadge').style.background = cat.css;
+  $('icCat').textContent = cat.label; $('icName').textContent = p.name;
+  $('icDesc').textContent = p.desc;
+  const chips = [`${lv.name}`, lv.sub];
+  if (p.code) chips.push(`Sector ${p.code} en plano`);
+  chips.push(`${p.entries.length} acceso${p.entries.length > 1 ? 's' : ''}`);
+  $('icChips').innerHTML = chips.map(c => `<span class="chip">${c}</span>`).join('');
+  $('infoCard').classList.remove('hidden');
+  document.querySelectorAll('.letters button').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
+  renderList();
+  if (fly) flyToPoint(o.center.clone().setY(o.top * 0.5), 95);
+}
+function closeCard() {
+  if (state.selected) setHighlight(state.selected, false);
+  state.selected = null;
+  $('infoCard').classList.add('hidden');
+  document.querySelectorAll('.letters button').forEach(b => b.classList.remove('sel'));
+  renderList();
+}
+$('icClose').addEventListener('click', closeCard);
+$('icGo').addEventListener('click', () => state.selected && routeTo(state.selected));
+$('icFocus').addEventListener('click', () => { const o = placeObjs[state.selected]; if (o) flyToPoint(o.center.clone().setY(o.top * 0.5), 70); });
+
+/* ---------- Ruta ---------- */
+function routeTo(placeId) {
+  const route = computeRoute(state.origin, placeId, state.accessible);
+  if (!route) { toast('No se encontró una ruta disponible'); return; }
+  const prevPlace = state.route?.placeId;
+  if (prevPlace && prevPlace !== placeId) placeObjs[prevPlace].label.element.classList.remove('dest');
+  placeObjs[placeId].label.element.classList.add('dest');
+  state.route = route;
+  const pts = drawRoute(route);
+  fitPoints(pts);
+
+  const t = TOTEMS.find(x => x.id === state.origin), p = placeObjs[placeId].place;
+  $('rcFrom').textContent = `Desde Tótem ${t.n} · ${t.name}${route.accessible ? ' · ♿ Ruta accesible' : ''}`;
+  $('rcTo').textContent = p.name;
+  $('rcDist').textContent = Math.round(route.meters);
+  $('rcTime').textContent = route.minutes;
+  $('rcStairs').textContent = route.accessible ? route.ramps : route.stairs;
+  $('rcStairsLbl').textContent = route.accessible ? 'rampas' : 'escaleras';
+
+  // Comparación con la otra modalidad (impacto de accesibilidad)
+  const note = $('rcNote');
+  if (route.accessible) {
+    const std = computeRoute(state.origin, placeId, false);
+    const extra = Math.round(route.meters - std.meters);
+    note.className = 'rc-note ok';
+    note.textContent = std.stairs === 0
+      ? '✅ Esta ruta no tiene escaleras: es la misma que la ruta estándar.'
+      : `✅ Sin escaleras: evita ${std.stairs} tramo${std.stairs > 1 ? 's' : ''} de escalera${extra > 0 ? ` (+${extra} m respecto a la ruta más corta)` : ''}.`;
+  } else if (route.stairs > 0) {
+    note.className = 'rc-note warn';
+    note.textContent = `⚠️ Incluye ${route.stairs} tramo${route.stairs > 1 ? 's' : ''} de escalera. Activa “♿ Ruta accesible” para evitarlas.`;
+  } else {
+    note.className = 'rc-note ok';
+    note.textContent = '✅ Esta ruta no tiene escaleras.';
+  }
+  const steps = buildSteps(route);
+  route.steps = steps;
+  $('rcList').innerHTML = steps.map(s => `<li class="${s.cls || ''}"><i>${s.icon}</i><span>${s.text}</span></li>`).join('');
+  $('routeCard').classList.remove('hidden');
+  $('infoCard').classList.add('hidden');          // la tarjeta de ruta reemplaza a la de información
+  if (innerWidth < 860) document.body.classList.add('collapsed');
+}
+function clearRoute() {
+  if (state.route) placeObjs[state.route.placeId].label.element.classList.remove('dest');
+  state.route = null; clearRouteMesh();
+  $('routeCard').classList.add('hidden');
+  speechSynthesis?.cancel?.();
+}
+$('rcClose').addEventListener('click', clearRoute);
+$('rcSteps').addEventListener('click', () => {
+  state.stepsOpen = !state.stepsOpen;
+  $('rcList').classList.toggle('hidden', !state.stepsOpen);
+  $('rcSteps').classList.toggle('on', state.stepsOpen);
+});
+$('rcSpeak').addEventListener('click', () => {
+  if (!('speechSynthesis' in window) || !state.route) return toast('Voz no disponible en este dispositivo');
+  speechSynthesis.cancel();
+  const r = state.route;
+  const text = `Ruta hacia ${placeObjs[r.placeId].place.name}. ${Math.round(r.meters)} metros, unos ${r.minutes} minutos. ` + r.steps.map(s => s.text).join(' ');
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'es-CL'; u.rate = 0.95;
+  const v = speechSynthesis.getVoices().find(v => v.lang?.startsWith('es'));
+  if (v) u.voice = v;
+  speechSynthesis.speak(u);
+});
+
+/* ---------- Controles de mapa ---------- */
+$('zoomIn').addEventListener('click', () => flyToPoint(controls.target.clone(), Math.max(controls.minDistance, camera.position.distanceTo(controls.target) * 0.7)));
+$('zoomOut').addEventListener('click', () => flyToPoint(controls.target.clone(), Math.min(controls.maxDistance, camera.position.distanceTo(controls.target) * 1.4)));
+$('resetView').addEventListener('click', () => flyTo(HOME.target, HOME.position));
+$('topView').addEventListener('click', () => { const t = controls.target.clone(); flyTo(t, t.clone().add(new THREE.Vector3(0, 300, 0.1))); });
+$('autoRot').addEventListener('click', () => { controls.autoRotate = !controls.autoRotate; $('autoRot').classList.toggle('on', controls.autoRotate); });
+$('bigText').addEventListener('click', () => { document.documentElement.classList.toggle('big'); $('bigText').classList.toggle('on'); });
+$('panelToggle').addEventListener('click', () => {
+  document.body.classList.toggle('collapsed');
+  updateToggleIcon();
+});
+function updateToggleIcon() {
+  const c = document.body.classList.contains('collapsed'), narrow = innerWidth < 860;
+  $('panelToggle').textContent = narrow ? (c ? '▲ Menú' : '▼') : (c ? '▶' : '◀');
+}
+
+/* ---------- Selección en el mapa (tap sin arrastrar) ---------- */
+const raycaster = new THREE.Raycaster(), pointer = new THREE.Vector2();
+let downAt = null;
+renderer.domElement.addEventListener('pointerdown', e => { downAt = { x: e.clientX, y: e.clientY, t: performance.now() }; controls.autoRotate = false; $('autoRot').classList.remove('on'); });
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!downAt) return;
+  const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y), dt = performance.now() - downAt.t;
+  downAt = null;
+  if (moved > 8 || dt > 600) return;
+  pointer.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+  const hit = raycaster.intersectObjects(pickables, false)[0];
+  if (!hit) return closeCard();
+  if (hit.object.userData.totemId) return setOrigin(hit.object.userData.totemId);
+  if (hit.object.userData.placeId) selectPlace(hit.object.userData.placeId, true);
+});
+
+/* ---------- Reinicio por inactividad (modo tótem) ---------- */
+let idleTimer;
+function resetIdle() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => {
+    clearRoute(); closeCard(); $('search').value = ''; renderList();
+    if (state.accessible) setAccessible(false);
+    flyTo(HOME.target, HOME.position, 1.6);
+    controls.autoRotate = true; $('autoRot').classList.add('on');
+  }, IDLE_RESET_MS);
+}
+['pointerdown', 'keydown', 'wheel'].forEach(ev => addEventListener(ev, resetIdle, { passive: true }));
+addEventListener('contextmenu', e => e.preventDefault());
+
+/* ---------- Reloj ---------- */
+const tick = () => { $('clock').textContent = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); };
+tick(); setInterval(tick, 15000);
+
+/* ---------- Redimensionar ---------- */
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight); labelRenderer.setSize(innerWidth, innerHeight);
+  updateToggleIcon();
+});
+
+/* ---------- Bucle de animación ---------- */
+const clock = new THREE.Clock();
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const LIMIT = 170;
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05), time = clock.elapsedTime;
+
+  if (tween.active) {
+    tween.t += dt / tween.dur;
+    const k = ease(Math.min(1, tween.t));
+    controls.target.lerpVectors(tween.fromT, tween.toT, k);
+    camera.position.lerpVectors(tween.fromP, tween.toP, k);
+    if (tween.t >= 1) tween.active = false;
+  }
+  // mantiene el foco dentro del campus
+  controls.target.x = THREE.MathUtils.clamp(controls.target.x, -LIMIT, LIMIT);
+  controls.target.z = THREE.MathUtils.clamp(controls.target.z, -LIMIT, LIMIT);
+  controls.update();
+
+  if (routeAnim) {
+    routeAnim.tex.offset.x -= dt * 1.6;
+    routeAnim.t = (routeAnim.t + dt * 22 / routeAnim.length) % 1;
+    routeAnim.walker.position.copy(routeAnim.curve.getPointAt(routeAnim.t));
+    routeAnim.pin.position.y = routeAnim.pinY + Math.sin(time * 3) * 0.8;
+    routeAnim.pin.rotation.y += dt * 1.5;
+  }
+  const o = totemObjs[state.origin];
+  if (o) { const s = 1 + (time * 0.8 % 1) * 1.6; o.ring.scale.set(s, s, s); o.ring.material.opacity = 0.85 * (1 - (time * 0.8 % 1)); }
+
+  document.body.classList.toggle('far', camera.position.distanceTo(controls.target) > 300);
+  renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
+}
+
+/* ---------- Arranque (con parámetros de URL para QR / tótem físico) ---------- */
+const qs = new URLSearchParams(location.search);
+renderList();
+updateToggleIcon();
+setOrigin(TOTEMS.some(t => t.id === qs.get('totem')) ? qs.get('totem') : 'T1', true);
+if (qs.get('acc') === '1') setAccessible(true);
+if (qs.get('dest') && placeObjs[qs.get('dest')]) { selectPlace(qs.get('dest'), false); routeTo(qs.get('dest')); }
+resetIdle();
+animate();
+// Exponer para depuración en consola
+window.campus = { G, PLACES, computeRoute, routeTo, setOrigin, setAccessible };
+</script>
+</body>
+</html>
