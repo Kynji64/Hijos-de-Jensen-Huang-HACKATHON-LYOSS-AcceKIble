@@ -137,22 +137,95 @@ El mapa **no necesita `npm install`**: Three.js se carga desde la CDN de jsDeliv
 | **Conexión a internet** | Three.js desde la CDN y Tour 360° | — |
 | *Opcional:* **Python 3** | Servir solo los mapas, sin Flutter | https://www.python.org/downloads/ |
 
-Comprueba la instalación de Flutter:
+### 2. Instalar Flutter
+
+La app solo usa la plataforma **web**, así que **no hace falta** Android Studio, Xcode ni Visual Studio. Basta con Flutter, Git y Chrome.
+
+#### macOS
+
+Opción rápida con [Homebrew](https://brew.sh):
+
+```bash
+brew install --cask flutter
+```
+
+Opción manual:
+
+1. Descarga el SDK (archivo `.zip`, canal *stable*) desde https://docs.flutter.dev/get-started/install/macos/web
+2. Descomprímelo en `~/development` (queda `~/development/flutter`).
+3. Agrega Flutter al `PATH` y recarga la terminal:
+
+```bash
+echo 'export PATH="$HOME/development/flutter/bin:$PATH"' >> ~/.zshrc
+```
+```bash
+source ~/.zshrc
+```
+
+#### Windows
+
+1. Instala **Git for Windows**: https://git-scm.com/download/win
+2. Descarga el SDK (archivo `.zip`, canal *stable*) desde https://docs.flutter.dev/get-started/install/windows/web
+3. Descomprímelo en una ruta **sin espacios ni permisos especiales**, por ejemplo `C:\src\flutter` (no uses `C:\Program Files`).
+4. Agrega `C:\src\flutter\bin` a la variable de entorno **Path**: menú Inicio → “Editar las variables de entorno de esta cuenta” → *Path* → *Editar* → *Nuevo* → `C:\src\flutter\bin` → *Aceptar*.
+5. Cierra y vuelve a abrir **PowerShell** para que tome el cambio.
+
+#### Linux (Ubuntu / Debian)
+
+Instala las herramientas base:
+
+```bash
+sudo apt-get update && sudo apt-get install -y curl git unzip xz-utils zip
+```
+
+Opción rápida con Snap:
+
+```bash
+sudo snap install flutter --classic
+```
+
+Opción manual: descarga el `.tar.xz` (canal *stable*) desde https://docs.flutter.dev/get-started/install/linux/web, extráelo en `~/development` y agrega Flutter al `PATH`:
+
+```bash
+echo 'export PATH="$HOME/development/flutter/bin:$PATH"' >> ~/.bashrc
+```
+```bash
+source ~/.bashrc
+```
+
+Si usas **Chromium** en vez de Chrome, indícale a Flutter dónde está:
+
+```bash
+export CHROME_EXECUTABLE=$(which chromium || which chromium-browser)
+```
+
+#### Verificar la instalación (todos los sistemas)
 
 ```bash
 flutter --version
 ```
+
+Debe indicar **Flutter 3.47 o superior** (canal *stable*). Si tienes una versión anterior:
+
 ```bash
-flutter doctor
+flutter upgrade
 ```
 
-`flutter doctor` debe mostrar **Chrome** como dispositivo disponible. Si Flutter dice que la web no está habilitada:
+Habilita la plataforma web (solo la primera vez):
 
 ```bash
 flutter config --enable-web
 ```
 
-### 2. Clonar el repositorio
+Revisa que todo esté en orden:
+
+```bash
+flutter doctor
+```
+
+Lo importante es que aparezcan con ✓ **Flutter** y **Chrome**. Las advertencias sobre Android toolchain, Xcode o Visual Studio se pueden ignorar, porque este proyecto solo usa la web.
+
+### 3. Clonar el repositorio
 
 ```bash
 git clone https://github.com/Kynji64/Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble.git
@@ -161,7 +234,7 @@ git clone https://github.com/Kynji64/Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceK
 cd Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble/totem_campus
 ```
 
-### 3. Descargar las dependencias de Flutter
+### 4. Descargar las dependencias de Flutter
 
 ```bash
 flutter pub get
