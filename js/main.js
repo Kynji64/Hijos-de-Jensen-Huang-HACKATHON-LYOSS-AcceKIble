@@ -414,7 +414,7 @@ scene.traverse(o => { if (o.userData.placeId === 'B' && o.isMesh && !pickables.i
    4. RED PEATONAL, CALLES CON NOMBRE Y VEGETACIÓN
    ===================================================================== */
 const netGroup = new THREE.Group(); scene.add(netGroup);
-const pathMat = mat(0xf6f2e8), streetMat = mat(0xc9ced6), rampMat = mat(0x2a8ce0), stepA = mat(0xf08a24), stepB = mat(0xf7b267);
+const pathMat = mat(0xf6f2e8), streetMat = mat(0xc9ced6), stepA = mat(0xf08a24), stepB = mat(0xf7b267);
 const railMat = mat(0xe8eef6), balMat = mat(0xd8c7a5);
 function ribbon(a, b, width, material, thick = 0.14) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(width, thick, a.distanceTo(b)), material);
@@ -425,13 +425,9 @@ const jointGeo = new THREE.CylinderGeometry(1, 1, 0.14, 18);
 for (const e of G.edges) {
   const A = nodePos(e.a), B = nodePos(e.b); A.y += 0.07; B.y += 0.07;
   const width = e.width || (e.street ? 4.4 : 2.4);
-  if (e.type === 'p') {
+  if (e.type === 'p' || e.type === 'r') {
     netGroup.add(ribbon(A, B, width, e.street ? streetMat : pathMat));
     for (const P of [A, B]) { const j = new THREE.Mesh(jointGeo, e.street ? streetMat : pathMat); j.scale.set(width / 2, 1, width / 2); j.position.copy(P); netGroup.add(j); }
-  } else if (e.type === 'r') {
-    netGroup.add(ribbon(A, B, width, rampMat, 0.35));
-    const dir = B.clone().sub(A), side = new THREE.Vector3(-dir.z, 0, dir.x).normalize().multiplyScalar(width / 2 + 0.2);
-    for (const s of [1, -1]) netGroup.add(ribbon(A.clone().addScaledVector(side, s).setY(A.y + 1), B.clone().addScaledVector(side, s).setY(B.y + 1), 0.18, railMat, 0.18));
   } else {
     // Escalera / escalinata con peldaños reales y barandas
     const lo = A.y < B.y ? A : B, hi = A.y < B.y ? B : A;
@@ -623,7 +619,6 @@ function setAccessible(on) {
   $('accRow').classList.toggle('on', on);
   document.body.classList.toggle('acc', on);
   stepA.color.set(on ? 0x9aa3ad : 0xf08a24); stepB.color.set(on ? 0xb8c0c8 : 0xf7b267);   // escaleras "apagadas"
-  rampMat.emissive.set(on ? 0x0d3d66 : 0x000000);
   if (state.route) routeTo(state.route.placeId);
   else toast(on ? '♿ Ruta accesible activada: se evitarán escaleras' : 'Ruta estándar (más corta)');
 }
