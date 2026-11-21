@@ -761,7 +761,7 @@ function flyToPoint(target, dist) {
 }
 function fitPoints(pts) {
   const b = new THREE.Box3().setFromPoints(pts), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
-  const dist = THREE.MathUtils.clamp(Math.max(s.x, s.z) * (innerWidth < 860 ? 2.0 : 1.35) + 55, 90, 420);
+  const dist = THREE.MathUtils.clamp(Math.max(s.x, s.z) * (innerWidth < 640 ? 2.0 : 1.35) + 55, 90, 420);
   flyTo(c, c.clone().add(new THREE.Vector3(-0.28, 0.78, 0.56).normalize().multiplyScalar(dist)));
 }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove('show'), 2400); }
@@ -965,7 +965,7 @@ function selectPlace(id, fly = true) {
   $('infoCard').classList.remove('hidden');
   document.querySelectorAll('.letters button').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
   renderList();
-  if (fly) { flyToPoint(o.center.clone().setY(o.top * 0.5), 100); speak(placeSpeech(p)); }
+  if (fly) { flyToPoint(o.center.clone().setY(o.top * 0.5), 100); speak(placeSpeech(p)); if (innerWidth < 1100) { document.body.classList.add('collapsed'); updateToggleIcon(); } }
 }
 function closeCard() {
   if (state.selected) setHighlight(state.selected, false);
@@ -1017,7 +1017,7 @@ function routeTo(placeId, opts = {}) {
   speak(routeSpeech(route, opts.prefix));
   $('routeCard').classList.remove('hidden');
   $('infoCard').classList.add('hidden');
-  if (innerWidth < 860) document.body.classList.add('collapsed');
+  if (innerWidth < 1100) document.body.classList.add('collapsed');   // ancho intermedio/móvil: la tarjeta de ruta usa todo el ancho
 }
 function clearRoute() {
   if (state.route) placeObjs[state.route.placeId].label.element.classList.remove('dest');
@@ -1064,7 +1064,7 @@ $('autoRot').addEventListener('click', () => { controls.autoRotate = !controls.a
 $('bigText').addEventListener('click', () => { document.documentElement.classList.toggle('big'); $('bigText').classList.toggle('on'); });
 $('panelToggle').addEventListener('click', () => { document.body.classList.toggle('collapsed'); updateToggleIcon(); });
 function updateToggleIcon() {
-  const c = document.body.classList.contains('collapsed'), narrow = innerWidth < 860;
+  const c = document.body.classList.contains('collapsed'), narrow = innerWidth < 640;
   $('panelToggle').textContent = narrow ? (c ? '▲ Menú' : '▼') : (c ? '▶' : '◀');
 }
 

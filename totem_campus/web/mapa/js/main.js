@@ -53,6 +53,7 @@ container.appendChild(labelRenderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xdfe7f1);
 scene.fog = new THREE.Fog(0xdfe7f1, 480, 1100);
+const SCENE_REFS = {};   // mallas que el modo alto contraste necesita recolorear
 
 const camera = new THREE.PerspectiveCamera(38, innerWidth / innerHeight, 1, 3000);
 const HOME = { target: new THREE.Vector3(-6, 5, 2), position: new THREE.Vector3(-80, 205, 240) };
@@ -131,7 +132,7 @@ const plazaPolys = C.PLAZAS.map(p => geo.rectPoly(p.rect[0], p.rect[1], p.rect[2
   g.computeVertexNormals();
   const terrain = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95 }));
   terrain.receiveShadow = true;
-  scene.add(terrain);
+  scene.add(terrain); SCENE_REFS.terrain = terrain;
 }
 
 /* =====================================================================
@@ -219,7 +220,8 @@ function groundText(text, A, B, width, color = 'rgba(255,255,255,.92)') {
 
 // Senderos (adoquín) y escaleras, dibujados directamente desde la red de rutas
 const pathGroup = new THREE.Group(); scene.add(pathGroup);
-const stepA = mat(0xd9cdb3), stepB = mat(0xc5b796), balMat = mat(0xd8c7a5), railMat = mat(0xe8eef6);
+const stepA = mat(0xefe7d7), stepB = mat(0xddd2bd), balMat = mat(0xd8c7a5), railMat = mat(0xe8eef6);
+const handrail = mat(0x55606c, { roughness: 0.5, metalness: 0.4 }), cheek = mat(0xc9bda4);
 function ribbon(a, b, width, material, thick = 0.12) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(width, thick, a.distanceTo(b) + 0.05), material);
   m.position.copy(a).add(b).multiplyScalar(0.5); m.lookAt(b); m.receiveShadow = true;
@@ -238,9 +240,16 @@ for (const e of G.edges) {
       const s = box(width, hgt, L / n + 0.03, i % 2 ? stepA : stepB, false);
       s.position.set(lo.x + dir.x * L * t, top - hgt / 2 + 0.1, lo.z + dir.z * L * t); s.rotation.y = ang; pathGroup.add(s);
     }
-    if (width > 4) {      // balaustradas en la escalinata monumental
-      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(width / 2 + 0.35);
-      for (const s of [1, -1]) pathGroup.add(ribbon(lo.clone().addScaledVector(side, s).setY(lo.y + 0.9), hi.clone().addScaledVector(side, s).setY(hi.y + 0.9), 0.55, balMat, 1.2));
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    if (width > 4) {      // balaustradas de piedra en la escalinata monumental
+      for (const s of [1, -1]) { const o = side.clone().multiplyScalar(s * (width / 2 + 0.35)); pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 0.9), hi.clone().add(o).setY(hi.y + 0.9), 0.55, balMat, 1.2)); }
+    } else {              // muros laterales bajos + pasamanos metálico en ambos costados
+      for (const s of [1, -1]) {
+        const o = side.clone().multiplyScalar(s * (width / 2 + 0.12));
+        pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 0.3), hi.clone().add(o).setY(hi.y + 0.3), 0.22, cheek, 0.6));
+        pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 1.05), hi.clone().add(o).setY(hi.y + 1.05), 0.09, handrail, 0.09));
+        for (const t of [0.05, 0.5, 0.95]) { const p = lo.clone().lerp(hi, t).add(o); const post = box(0.08, 0.8, 0.08, handrail, false); post.position.set(p.x, p.y + 0.65, p.z); pathGroup.add(post); }
+      }
     }
   } else {
     A.y += 0.1; B.y += 0.1;
@@ -252,6 +261,30 @@ for (const e of G.edges) {
     }
   }
 }
+
+// Descanso semicircular de la escalinata de Acceso Av. España
+{
+  const p = wp(791, 130), disc = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.9, 0.5, 40), mat(0xe8dfcc));
+  disc.position.set(p.x, p.y + 0.05, p.z); disc.receiveShadow = true; pathGroup.add(disc);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.18, 6, 40, Math.PI), balMat);
+  ring.rotation.set(-Math.PI / 2, 0, -0.38); ring.position.set(p.x, p.y + 0.6, p.z); pathGroup.add(ring);
+}
+// Marcadores de escalera: uno por tramo (grupo conectado de aristas con hasStairs). Ocultos por defecto:
+// la vista de accesibilidad los muestra con window.campus.setStairMarkers(true).
+const stairMarkers = [];
+{
+  const stairEdges = G.edges.filter(e => e.hasStairs), seen = new Set();
+  for (const e0 of stairEdges) {
+    if (seen.has(e0)) continue;
+    const group = [e0], nodes = new Set([e0.a, e0.b]); seen.add(e0);
+    for (let grew = true; grew;) { grew = false; for (const e of stairEdges) if (!seen.has(e) && e.name === e0.name && (nodes.has(e.a) || nodes.has(e.b))) { seen.add(e); group.push(e); nodes.add(e.a); nodes.add(e.b); grew = true; } }
+    const pts = [...nodes].map(nodePos), c = pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length);
+    const anchor = new THREE.Object3D(); anchor.position.set(c.x, Math.max(...pts.map(q => q.y)) + 2.2, c.z); scene.add(anchor);
+    const lbl = addLabel(anchor, '🪜', 'stairlbl'); lbl.element.title = e0.name || 'Escalera';
+    stairMarkers.push(lbl);
+  }
+}
+function setStairMarkers(on) { document.body.classList.toggle('stairs-on', !!on); }
 
 /* =====================================================================
    4. ARQUITECTURA POR ESTILO (coordenadas locales del edificio, en px)
@@ -300,7 +333,7 @@ function gableRoof(w, d, axis, rise, color, overhang = 1.1) {
   const g = new THREE.ExtrudeGeometry(shape, { depth: length, bevelEnabled: false });
   g.translate(0, 0, -length / 2);
   if (axis === 'x') g.rotateY(Math.PI / 2);
-  const m = new THREE.Mesh(g, mat(color, { roughness: 0.8 })); m.castShadow = m.receiveShadow = true;
+  const m = new THREE.Mesh(g, mat(color, { roughness: 0.8 })); m.castShadow = m.receiveShadow = true; m.userData.roof = true;
   return m;
 }
 const TEJA = 0x8a3a24;
@@ -348,7 +381,7 @@ const BUILDERS = {
       const h1 = new THREE.Mesh(new THREE.PlaneGeometry(0.14, tw * 0.25), handMat); h1.position.copy(face.position).add(new THREE.Vector3(nx * 0.02, tw * 0.09, nz * 0.02)); h1.rotation.y = a; g.add(h1);
     }
     const spire = new THREE.Mesh(new THREE.ConeGeometry(tw * 0.62, 7.5, 4), mat(0x4d4a52, { roughness: 0.6 })); spire.rotation.y = Math.PI / 4;
-    spire.position.set(0, th + 0.9 + 3.75, tz); spire.castShadow = true; g.add(spire);
+    spire.position.set(0, th + 0.9 + 3.75, tz); spire.castShadow = true; spire.userData.roof = true; g.add(spire);
     for (const dx of [-1, 1]) for (const dz of [-1, 1]) pinnacle(g, dx * tw / 2, tz + dz * tw / 2, th + 0.9, 0.8);
     return ctx.base + p.h + 6;
   },
@@ -384,7 +417,7 @@ const BUILDERS = {
     for (let i = 0; i < teeth; i++) { const x = -r.w / 2 + i * tw; shape.lineTo(x, rise); shape.lineTo(x + tw, 0); }
     shape.lineTo(-r.w / 2, 0);
     const sg = new THREE.ExtrudeGeometry(shape, { depth: r.d, bevelEnabled: false }); sg.translate(0, 0, -r.d / 2);
-    const roof = new THREE.Mesh(sg, mat(0x9aa1a8, { roughness: 0.55, metalness: 0.2 })); roof.position.set(r.cx, top, r.cz); roof.castShadow = true; g.add(roof);
+    const roof = new THREE.Mesh(sg, mat(0x9aa1a8, { roughness: 0.55, metalness: 0.2 })); roof.position.set(r.cx, top, r.cz); roof.castShadow = true; roof.userData.roof = true; g.add(roof);
     const glass = new THREE.MeshStandardMaterial({ color: 0xbfe6ff, emissive: 0x3b7fa8, emissiveIntensity: 0.35, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
     for (let i = 0; i < teeth; i++) { const pane = new THREE.Mesh(new THREE.PlaneGeometry(r.d * 0.96, rise * 0.88), glass); pane.rotation.y = Math.PI / 2; pane.position.set(r.cx - r.w / 2 + i * tw + 0.05, top + rise * 0.46, r.cz); g.add(pane); }
     return top + rise + 3;
@@ -394,7 +427,7 @@ const BUILDERS = {
     const r = LR(-p.w / 2, -p.d / 2, p.w / 2, p.d / 2), top = ctx.base + p.h;
     body(g, r, ctx.bottom, top, TEX.gothic, 0xfff4e0, 3.2, 3.2);
     const hip = new THREE.Mesh(new THREE.ConeGeometry(Math.SQRT1_2 * 1.12, 1, 4), mat(TEJA)); hip.rotation.y = Math.PI / 4;
-    hip.scale.set(r.w, 3.4, r.d); hip.position.set(0, top + 1.7, 0); hip.castShadow = true; g.add(hip);
+    hip.scale.set(r.w, 3.4, r.d); hip.position.set(0, top + 1.7, 0); hip.castShadow = true; hip.userData.roof = true; g.add(hip);
     const chim = box(0.7, 2.4, 0.7, mat(0x9b5a43)); chim.position.set(r.w * 0.25, top + 2.2, -r.d * 0.15); g.add(chim);
     return top + 5;
   },
@@ -550,7 +583,7 @@ for (const p of C.PLACES) {
   const meshes = []; g.traverse(o => { if (o.isMesh) meshes.push(o); });
   placeObjs[p.id] = { place: p, group: g, label, top, level: TER.levelAt(p.px, p.py), center: new THREE.Vector3(c.x, base, c.y), meshes };
 }
-for (const d of C.DECOR) buildVolume(d, null);
+const decorGroups = C.DECOR.map(d => buildVolume(d, null).g);
 
 /* =====================================================================
    5. VEGETACIÓN, MOBILIARIO, TÓTEMS Y RUTA
@@ -648,6 +681,7 @@ for (const d of C.DECOR) buildVolume(d, null);
   walls.castShadow = walls.receiveShadow = roofs.castShadow = roofs.receiveShadow = true;
   const houses = new THREE.Group(); houses.add(walls, roofs);
   crown.count = trunk.count = n; scene.add(crown, trunk, houses);
+  Object.assign(SCENE_REFS, { crown, trunk, walls, roofs });
 }
 // Rótulos urbanos
 const streetLbl = (txt, px, py, cls = 'street') => { const o = new THREE.Object3D(); o.position.copy(wp(px, py, 2)); scene.add(o); addLabel(o, txt, cls); };
@@ -686,13 +720,13 @@ function clearRouteMesh() {
 }
 function drawRoute(route) {
   clearRouteMesh();
-  const color = 0xffc72c;
+  const color = hc.on ? 0xffff00 : 0xffc72c, rCore = hc.on ? 0.85 : 0.5, rGlow = hc.on ? 1.9 : 1.2;
   const pts = route.nodes.map(id => nodePos(id).add(new THREE.Vector3(0, 0.9, 0)));
   const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal');
   const length = curve.getLength(), segs = Math.max(120, Math.floor(length * 3));
   const tex = stripeTexture(); tex.repeat.set(length / 6, 1);
-  const core = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 0.5, 10), new THREE.MeshBasicMaterial({ color, map: tex }));
-  const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, 1.2, 12), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, depthWrite: false, depthTest: false }));
+  const core = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, rCore, 10), new THREE.MeshBasicMaterial({ color, map: tex }));
+  const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, segs, rGlow, 12), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: hc.on ? 0.45 : 0.3, depthWrite: false, depthTest: false }));
   glow.renderOrder = 10;
   const walker = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   walker.add(new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 14), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false })));
@@ -724,11 +758,125 @@ function flyToPoint(target, dist) {
 }
 function fitPoints(pts) {
   const b = new THREE.Box3().setFromPoints(pts), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
-  const dist = THREE.MathUtils.clamp(Math.max(s.x, s.z) * (innerWidth < 860 ? 2.0 : 1.35) + 55, 90, 420);
+  const dist = THREE.MathUtils.clamp(Math.max(s.x, s.z) * (innerWidth < 640 ? 2.0 : 1.35) + 55, 90, 420);
   flyTo(c, c.clone().add(new THREE.Vector3(-0.28, 0.78, 0.56).normalize().multiplyScalar(dist)));
 }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._h); toast._h = setTimeout(() => t.classList.remove('show'), 2400); }
 const totemById = id => C.TOTEMS.find(x => x.id === id);
+
+/* ---------- Guía por voz (Web Speech API nativa, sin servicios externos) ---------- */
+const synth = 'speechSynthesis' in window ? window.speechSynthesis : null;
+const voice = { on: false, es: null, token: 0 };
+function pickVoice() {
+  if (!synth) return;
+  const vs = synth.getVoices();
+  voice.es = vs.find(v => /^es[-_]CL/i.test(v.lang)) || vs.find(v => /^es[-_](419|US|MX|AR|CO|PE)/i.test(v.lang))
+          || vs.find(v => /^es[-_]ES/i.test(v.lang)) || vs.find(v => /^es/i.test(v.lang)) || null;
+}
+if (synth) { pickVoice(); synth.addEventListener?.('voiceschanged', pickVoice); }
+/** Texto pensado para oír: sin emojis ni abreviaturas. */
+const speakable = t => t
+  .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '')
+  .replace(/\bAv\.\s/g, 'Avenida ').replace(/\bDep\.\s(?=(Humanístico|Comercial)\b)/g, 'Departamento ').replace(/\bDep\.\s/g, 'Departamento de ').replace(/(\d+) m\b/g, '$1 metros').replace(/≈/g, 'aproximadamente ')
+  .replace(/(\d+)x(\d+)/g, '$1 por $2').replace(/\s[·–]\s/g, ', ').replace(/\s*\(\s*/g, ', ').replace(/\s*\)/g, '')
+  .replace(/\s*,\s*([,.])/g, '$1').replace(/\s+/g, ' ').trim();
+/** Habla una lista de frases (cada una en su propio enunciado: evita cortes en textos largos). */
+function speak(parts, force = false) {
+  if (!synth || (!voice.on && !force)) return;
+  synth.cancel();
+  const token = ++voice.token, list = (Array.isArray(parts) ? parts : [parts]).map(speakable).filter(Boolean);
+  list.forEach((txt, i) => {
+    const u = new SpeechSynthesisUtterance(txt);
+    u.lang = voice.es?.lang || 'es-CL'; if (voice.es) u.voice = voice.es; u.rate = 0.95;
+    u.onstart = () => { if (token === voice.token) setSpeaking(true); };
+    u.onend = u.onerror = () => { if (token === voice.token && i === list.length - 1) setSpeaking(false); };
+    synth.speak(u);
+  });
+}
+function setSpeaking(on) { $('voiceBtn').classList.toggle('speaking', !!on && voice.on); }
+function routeSpeech(route, prefix) {
+  const p = placeObjs[route.placeId].place, parts = [];
+  if (prefix) parts.push(prefix);
+  parts.push(`Ruta hacia ${p.name}${p.sub ? ', ' + p.sub : ''}.`);
+  if (route.accessible) parts.push('Ruta accesible activada, sin escaleras.');
+  parts.push(`Distancia: ${Math.round(route.meters)} metros. Tiempo estimado de caminata: ${route.minutes} minuto${route.minutes > 1 ? 's' : ''}.`);
+  parts.push(route.stairs ? `La ruta incluye ${route.stairs} escalera${route.stairs > 1 ? 's' : ''}.` : 'Ruta libre de escaleras.');
+  if (route.external) parts.push('Incluye un tramo por una calle exterior, fuera de las rejas.');
+  route.steps.slice(1).forEach((st, i) => parts.push(`Paso ${i + 1}: ${st.text}`));
+  return parts;
+}
+function placeSpeech(p) {
+  return [`${p.name}${p.sub ? ', ' + p.sub : ''}.`, p.desc, 'Toca Cómo llegar aquí para escuchar la ruta.'];
+}
+function setVoice(on) {
+  if (on && !synth) { toast('La voz no está disponible en este dispositivo'); return; }
+  voice.on = on;
+  $('voiceBtn').classList.toggle('on', on);
+  $('voiceBtn').setAttribute('aria-pressed', String(on));
+  $('voiceBtn').setAttribute('aria-label', on ? 'Desactivar guía por voz' : 'Activar guía por voz para accesibilidad');
+  if (on) {
+    const t = totemById(state.origin);
+    speak(['Guía por voz activada.', `Estás ubicado en el Tótem ${t.n}, ${t.name}.`,
+      state.route ? 'Tienes una ruta activa. Toca Repetir para escucharla de nuevo.' : 'Selecciona un destino o toca un edificio para escuchar cómo llegar.']);
+  } else { synth?.cancel(); voice.token++; setSpeaking(false); toast('Guía por voz desactivada'); }
+}
+/* ---------- Modo alto contraste (interfaz + escena 3D) ---------- */
+const hc = { on: false, saved: new Map() };
+const HC_EDGE = new THREE.LineBasicMaterial({ color: 0x000000 });
+const HC_BUILDINGS = new Set(['gothic-a', 'gothic-court', 'talleres', 'gothic-pav', 'chalet', 'mrt', 'modern', 'modern-l', 'parts', 'kiosk', 'house']);
+/** Recolorea un material guardando su estado original (color y textura) para restaurarlo después. */
+function hcPaint(m, color, keepMap = false) {
+  if (!m) return;
+  if (!hc.saved.has(m)) hc.saved.set(m, { color: m.color ? m.color.getHex() : null, map: m.map ?? null });
+  if (color != null && m.color) m.color.setHex(color);
+  if (!keepMap && m.map) { m.map = null; m.needsUpdate = true; }
+}
+function hcRestore() {
+  for (const [m, o] of hc.saved) { if (o.color != null) m.color.setHex(o.color); if (m.map !== o.map) { m.map = o.map; m.needsUpdate = true; } }
+  hc.saved.clear();
+}
+function hcBuildingGroups() { return [...Object.values(placeObjs).filter(o => HC_BUILDINGS.has(o.place.style)).map(o => o.group), ...decorGroups]; }
+function setHighContrast(on) {
+  hc.on = on;
+  document.body.classList.toggle('high-contrast', on);
+  $('contrastBtn').classList.toggle('on', on);
+  $('contrastBtn').setAttribute('aria-pressed', String(on));
+  $('contrastBtn').setAttribute('aria-label', on ? 'Desactivar modo alto contraste' : 'Activar modo alto contraste');
+  if (on) {
+    scene.background.setHex(0x0a0a0a); scene.fog.color.setHex(0x0a0a0a);
+    // entorno oscuro y mate: terreno, mar, casas y árboles (los colores por vértice/instancia se multiplican)
+    hcPaint(SCENE_REFS.terrain.material, 0x2a2a2a, true);
+    hcPaint(SCENE_REFS.walls.material, 0x2b2b2b, true); hcPaint(SCENE_REFS.roofs.material, 0x222222, true);
+    hcPaint(SCENE_REFS.crown.material, 0x4f5f4f, true); hcPaint(SCENE_REFS.trunk.material, 0x333333, true);
+    // calles, senderos y escaleras
+    hcPaint(asphalt, 0x3a3a3a); hcPaint(curb, 0xffffff); hcPaint(lineMat, 0xffffff);
+    hcPaint(innerPave, 0xdedede); hcPaint(innerEdge, 0xffff00); hcPaint(innerCurb, 0xffffff); hcPaint(cobble, 0xb0b0b0);
+    hcPaint(stepA, 0xff7a00); hcPaint(stepB, 0xff3d00); hcPaint(handrail, 0xffffff); hcPaint(cheek, 0xffffff); hcPaint(balMat, 0xffffff);
+    // edificios del campus: fachadas blancas sólidas, techos grises y aristas negras
+    for (const g of hcBuildingGroups()) g.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+        if (m.isMeshBasicMaterial || m.transparent) continue;
+        hcPaint(m, o.userData.roof ? 0xb5b5b5 : 0xf5f5f5);
+      }
+      if (!o.userData.hcEdge) { o.userData.hcEdge = new THREE.LineSegments(new THREE.EdgesGeometry(o.geometry, 25), HC_EDGE); o.add(o.userData.hcEdge); }
+      o.userData.hcEdge.visible = true;
+    });
+  } else {
+    hcRestore();
+    scene.background.setHex(0xdfe7f1); scene.fog.color.setHex(0xdfe7f1);
+    for (const g of hcBuildingGroups()) g.traverse(o => { if (o.userData.hcEdge) o.userData.hcEdge.visible = false; });
+  }
+  if (state.route) drawRoute(state.route);          // vuelve a pintar la ruta con el color del modo
+  speak(on ? 'Modo alto contraste activado' : 'Modo alto contraste desactivado');
+}
+$('contrastBtn').addEventListener('click', () => setHighContrast(!hc.on));
+
+$('voiceBtn').addEventListener('click', () => {
+  // tocar mientras habla: detiene la locución (la guía sigue activa); tocar en silencio: desactiva la guía
+  if (voice.on && synth?.speaking) { synth.cancel(); voice.token++; setSpeaking(false); toast('Locución detenida · toca de nuevo para desactivar la voz'); return; }
+  setVoice(!voice.on);
+});
 
 /* ---------- Origen ---------- */
 function setOrigin(id, silent) {
@@ -742,8 +890,9 @@ function setOrigin(id, silent) {
     o.label.element.textContent = here ? `📍 ESTÁS AQUÍ · T${tt.n}` : `T${tt.n} · ${tt.short}`;
     o.ring.material.opacity = here ? 0.8 : 0;
   }
-  if (state.route) routeTo(state.route.placeId);
-  else if (!silent) { flyToPoint(nodePos(id), 120); toast(`Origen: Tótem ${t.n} · ${t.name}`); }
+  const said = `Origen cambiado. Ahora estás en el Tótem ${t.n}, ${t.name}.`;
+  if (state.route) routeTo(state.route.placeId, { prefix: silent ? '' : said });
+  else if (!silent) { flyToPoint(nodePos(id), 120); toast(`Origen: Tótem ${t.n} · ${t.name}`); speak(said); }
 }
 $('totemBtns').innerHTML = C.TOTEMS.map(t => {
   const lv = LV[G.nodes[t.id].level];
@@ -813,7 +962,7 @@ function selectPlace(id, fly = true) {
   $('infoCard').classList.remove('hidden');
   document.querySelectorAll('.letters button').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
   renderList();
-  if (fly) flyToPoint(o.center.clone().setY(o.top * 0.5), 100);
+  if (fly) { flyToPoint(o.center.clone().setY(o.top * 0.5), 100); speak(placeSpeech(p)); if (innerWidth < 1100) { document.body.classList.add('collapsed'); updateToggleIcon(); } }
 }
 function closeCard() {
   if (state.selected) setHighlight(state.selected, false);
@@ -828,7 +977,7 @@ $('icFocus').addEventListener('click', () => { const o = placeObjs[state.selecte
 $('icTour').addEventListener('click', () => openTour(state.selected));
 
 /* ---------- Ruta ---------- */
-function routeTo(placeId) {
+function routeTo(placeId, opts = {}) {
   const place = placeObjs[placeId].place;
   const route = computeRoute(G, place, state.origin, false);
   if (!route) { toast('No se encontró una ruta disponible'); return; }
@@ -855,9 +1004,10 @@ function routeTo(placeId) {
   }
   route.steps = buildSteps(G, C, route);
   $('rcList').innerHTML = route.steps.map(s => `<li class="${s.cls || ''}"><i>${s.icon}</i><span>${s.text}</span></li>`).join('');
+  speak(routeSpeech(route, opts.prefix));
   $('routeCard').classList.remove('hidden');
   $('infoCard').classList.add('hidden');
-  if (innerWidth < 860) document.body.classList.add('collapsed');
+  if (innerWidth < 1100) document.body.classList.add('collapsed');   // ancho intermedio/móvil: la tarjeta de ruta usa todo el ancho
 }
 function clearRoute() {
   if (state.route) placeObjs[state.route.placeId].label.element.classList.remove('dest');
@@ -873,13 +1023,8 @@ $('rcSteps').addEventListener('click', () => {
 });
 $('rcTour').addEventListener('click', () => state.route && openTour(state.route.placeId));
 $('rcSpeak').addEventListener('click', () => {
-  if (!('speechSynthesis' in window) || !state.route) return toast('Voz no disponible en este dispositivo');
-  speechSynthesis.cancel();
-  const r = state.route, p = placeObjs[r.placeId].place;
-  const u = new SpeechSynthesisUtterance(`Ruta hacia ${p.name}. ${Math.round(r.meters)} metros, unos ${r.minutes} minutos. ` + r.steps.map(s => s.text).join(' '));
-  u.lang = 'es-CL'; u.rate = 0.95;
-  const v = speechSynthesis.getVoices().find(v => v.lang?.startsWith('es')); if (v) u.voice = v;
-  speechSynthesis.speak(u);
+  if (!synth) return toast('Voz no disponible en este dispositivo');
+  if (state.route) speak(routeSpeech(state.route), true);
 });
 
 /* ---------- Tour 360° USM ---------- */
@@ -909,7 +1054,7 @@ $('autoRot').addEventListener('click', () => { controls.autoRotate = !controls.a
 $('bigText').addEventListener('click', () => { document.documentElement.classList.toggle('big'); $('bigText').classList.toggle('on'); });
 $('panelToggle').addEventListener('click', () => { document.body.classList.toggle('collapsed'); updateToggleIcon(); });
 function updateToggleIcon() {
-  const c = document.body.classList.contains('collapsed'), narrow = innerWidth < 860;
+  const c = document.body.classList.contains('collapsed'), narrow = innerWidth < 640;
   $('panelToggle').textContent = narrow ? (c ? '▲ Menú' : '▼') : (c ? '▶' : '◀');
 }
 
@@ -936,6 +1081,8 @@ function resetIdle() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     clearRoute(); closeCard(); $('tourModal').classList.add('hidden'); $('search').value = ''; renderList();
+    if (voice.on) setVoice(false);
+    if (hc.on) setHighContrast(false);
     flyTo(HOME.target, HOME.position, 1.6);
     controls.autoRotate = true; $('autoRot').classList.add('on');
   }, IDLE_RESET_MS);
@@ -991,5 +1138,7 @@ if (qs.get('dest') && placeObjs[qs.get('dest')]) { selectPlace(qs.get('dest'), f
 resetIdle();
 animate();
 // depuración: window.campus.view(target, position) dibuja un cuadro aunque la pestaña esté en segundo plano
-window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour,
+window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour, setStairMarkers, stairMarkers, setHighContrast,
+  voice: { setVoice, speak, isOn: () => voice.on,
+    announceAccessible: on => speak(on ? 'Ruta accesible activada. Las rutas evitarán escaleras.' : 'Ruta accesible desactivada.') },
   view(t, p) { if (t) controls.target.set(...t); if (p) camera.position.set(...p); tween.active = false; controls.update(); renderer.render(scene, camera); labelRenderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.8); } };
