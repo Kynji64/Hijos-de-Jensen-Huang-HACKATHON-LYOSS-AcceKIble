@@ -1,13 +1,10 @@
-# Tótem USM · Campus sin barreras
+# AcceKIble · Tótem USM — Campus sin barreras
 
 **Mapa 3D interactivo y orientación accesible para el Campus Casa Central de la UTFSM (Valparaíso).**
 Un tótem táctil que muestra dónde estás, traza la mejor ruta hacia cualquier edificio y, en modo *Movilidad reducida*, calcula siempre el camino óptimo **sin escaleras**. Incluye guía por voz y alto contraste para personas con baja visión.
 
 > Hackathon LYOSS USM 2026 · Desafío **“Campus sin barreras: movilidad y orientación para todos”**
-> Equipo **Hijos de Jensen Huang** · Repositorio `Hijos-de-Jensen-Huang-HACKATHON-LYOSS`
-
-<!-- TODO: reemplazar por el enlace definitivo de Vercel cuando esté publicado -->
-🌐 **Demo en línea (Vercel):** https://ENLACE-POR-DEFINIR.vercel.app
+> Equipo **Hijos de Jensen Huang** · Repositorio [`Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble`](https://github.com/Kynji64/Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble)
 
 ![Vista general del campus en el tótem](docs/img/01-vista-general.jpg)
 
@@ -123,7 +120,6 @@ flowchart LR
 | Rutas | Dijkstra con cola de prioridad (implementación propia) | — | `js/pathfinding/dijkstra.js` |
 | APIs del navegador | **WebGL**, **Web Speech API** (`speechSynthesis`), `importmap` | — | Render 3D y guía por voz |
 | Servicios externos | **Tour 360° USM** (iframe) | — | Vista previa de interiores y accesos |
-| Despliegue | **Vercel** | — | Demo en línea |
 
 El mapa **no necesita `npm install`**: Three.js se carga desde la CDN de jsDelivr con un `importmap`.
 
@@ -140,7 +136,6 @@ El mapa **no necesita `npm install`**: Three.js se carga desde la CDN de jsDeliv
 | **Google Chrome** (o Microsoft Edge) | Navegador donde corre la app | https://www.google.com/chrome/ |
 | **Conexión a internet** | Three.js desde la CDN y Tour 360° | — |
 | *Opcional:* **Python 3** | Servir solo los mapas, sin Flutter | https://www.python.org/downloads/ |
-| *Opcional:* **Node.js** 18+ y **Vercel CLI** | Publicar la demo en Vercel | https://nodejs.org/ · `npm i -g vercel` |
 
 Comprueba la instalación de Flutter:
 
@@ -160,10 +155,10 @@ flutter config --enable-web
 ### 2. Clonar el repositorio
 
 ```bash
-git clone https://github.com/Kynji64/Hijos-de-Jensen-Huang-HACKATHON-LYOSS.git
+git clone https://github.com/Kynji64/Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble.git
 ```
 ```bash
-cd Hijos-de-Jensen-Huang-HACKATHON-LYOSS/totem_campus
+cd Hijos-de-Jensen-Huang-HACKATHON-LYOSS-AcceKIble/totem_campus
 ```
 
 ### 3. Descargar las dependencias de Flutter
@@ -214,10 +209,6 @@ python3 -m http.server 8000
 - Mapa general: **http://localhost:8000/mapa/**
 - Mapa de movilidad reducida: **http://localhost:8000/mapa_accesible/**
 
-### Opción C · Demo en línea
-
-🌐 https://ENLACE-POR-DEFINIR.vercel.app <!-- TODO: enlace definitivo de Vercel -->
-
 ### Recorrido sugerido para probar (2–3 minutos)
 
 1. En **“¿En qué tótem estás?”** elige **T1 · Acceso Av. España**.
@@ -226,25 +217,6 @@ python3 -m http.server 8000
 4. Toca **🔊 Voz** y luego cualquier edificio: escucharás su descripción y, al trazar una ruta, las indicaciones paso a paso.
 5. Toca **◐ Contraste** para el modo de alto contraste y **A+** para agrandar el texto.
 6. En la tarjeta de un edificio, toca **🌐 Ver interior y accesos en Tour 360° USM**.
-
-### Publicar en Vercel
-
-Flutter no viene instalado en Vercel, así que la forma más simple es compilar en tu equipo y subir la carpeta generada:
-
-```bash
-cd totem_campus
-```
-```bash
-flutter build web --release
-```
-```bash
-cd build/web
-```
-```bash
-vercel --prod
-```
-
-La primera vez, la CLI de Vercel pide iniciar sesión y crear o vincular el proyecto. Las carpetas `mapa/` y `mapa_accesible/` se copian solas dentro de `build/web`.
 
 ---
 

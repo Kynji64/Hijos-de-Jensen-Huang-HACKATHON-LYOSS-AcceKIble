@@ -1,6 +1,6 @@
 # totem_campus · App del tótem (Flutter web)
 
-App del tótem del proyecto **Tótem USM · Campus sin barreras** (Hackathon LYOSS USM 2026, equipo Hijos de Jensen Huang).
+App del tótem del proyecto **AcceKIble · Tótem USM — Campus sin barreras** (Hackathon LYOSS USM 2026, equipo Hijos de Jensen Huang).
 
 - `lib/main.dart`: layout del tótem, selector **Mapa general / Movilidad reducida** y el `iframe` que carga el mapa 3D.
 - `lib/panel_info.dart`: panel derecho con avisos, servicios, preguntas frecuentes y botón de ayuda.
