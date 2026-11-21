@@ -219,7 +219,8 @@ function groundText(text, A, B, width, color = 'rgba(255,255,255,.92)') {
 
 // Senderos (adoquín) y escaleras, dibujados directamente desde la red de rutas
 const pathGroup = new THREE.Group(); scene.add(pathGroup);
-const stepA = mat(0xd9cdb3), stepB = mat(0xc5b796), balMat = mat(0xd8c7a5), railMat = mat(0xe8eef6);
+const stepA = mat(0xefe7d7), stepB = mat(0xddd2bd), balMat = mat(0xd8c7a5), railMat = mat(0xe8eef6);
+const handrail = mat(0x55606c, { roughness: 0.5, metalness: 0.4 }), cheek = mat(0xc9bda4);
 function ribbon(a, b, width, material, thick = 0.12) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(width, thick, a.distanceTo(b) + 0.05), material);
   m.position.copy(a).add(b).multiplyScalar(0.5); m.lookAt(b); m.receiveShadow = true;
@@ -238,9 +239,16 @@ for (const e of G.edges) {
       const s = box(width, hgt, L / n + 0.03, i % 2 ? stepA : stepB, false);
       s.position.set(lo.x + dir.x * L * t, top - hgt / 2 + 0.1, lo.z + dir.z * L * t); s.rotation.y = ang; pathGroup.add(s);
     }
-    if (width > 4) {      // balaustradas en la escalinata monumental
-      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(width / 2 + 0.35);
-      for (const s of [1, -1]) pathGroup.add(ribbon(lo.clone().addScaledVector(side, s).setY(lo.y + 0.9), hi.clone().addScaledVector(side, s).setY(hi.y + 0.9), 0.55, balMat, 1.2));
+    const side = new THREE.Vector3(-dir.z, 0, dir.x);
+    if (width > 4) {      // balaustradas de piedra en la escalinata monumental
+      for (const s of [1, -1]) { const o = side.clone().multiplyScalar(s * (width / 2 + 0.35)); pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 0.9), hi.clone().add(o).setY(hi.y + 0.9), 0.55, balMat, 1.2)); }
+    } else {              // muros laterales bajos + pasamanos metálico en ambos costados
+      for (const s of [1, -1]) {
+        const o = side.clone().multiplyScalar(s * (width / 2 + 0.12));
+        pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 0.3), hi.clone().add(o).setY(hi.y + 0.3), 0.22, cheek, 0.6));
+        pathGroup.add(ribbon(lo.clone().add(o).setY(lo.y + 1.05), hi.clone().add(o).setY(hi.y + 1.05), 0.09, handrail, 0.09));
+        for (const t of [0.05, 0.5, 0.95]) { const p = lo.clone().lerp(hi, t).add(o); const post = box(0.08, 0.8, 0.08, handrail, false); post.position.set(p.x, p.y + 0.65, p.z); pathGroup.add(post); }
+      }
     }
   } else {
     A.y += 0.1; B.y += 0.1;
@@ -252,6 +260,30 @@ for (const e of G.edges) {
     }
   }
 }
+
+// Descanso semicircular de la escalinata de Acceso Av. España
+{
+  const p = wp(791, 130), disc = new THREE.Mesh(new THREE.CylinderGeometry(2.7, 2.9, 0.5, 40), mat(0xe8dfcc));
+  disc.position.set(p.x, p.y + 0.05, p.z); disc.receiveShadow = true; pathGroup.add(disc);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.8, 0.18, 6, 40, Math.PI), balMat);
+  ring.rotation.set(-Math.PI / 2, 0, -0.38); ring.position.set(p.x, p.y + 0.6, p.z); pathGroup.add(ring);
+}
+// Marcadores de escalera: uno por tramo (grupo conectado de aristas con hasStairs). Ocultos por defecto:
+// la vista de accesibilidad los muestra con window.campus.setStairMarkers(true).
+const stairMarkers = [];
+{
+  const stairEdges = G.edges.filter(e => e.hasStairs), seen = new Set();
+  for (const e0 of stairEdges) {
+    if (seen.has(e0)) continue;
+    const group = [e0], nodes = new Set([e0.a, e0.b]); seen.add(e0);
+    for (let grew = true; grew;) { grew = false; for (const e of stairEdges) if (!seen.has(e) && e.name === e0.name && (nodes.has(e.a) || nodes.has(e.b))) { seen.add(e); group.push(e); nodes.add(e.a); nodes.add(e.b); grew = true; } }
+    const pts = [...nodes].map(nodePos), c = pts.reduce((a, b) => a.add(b), new THREE.Vector3()).divideScalar(pts.length);
+    const anchor = new THREE.Object3D(); anchor.position.set(c.x, Math.max(...pts.map(q => q.y)) + 2.2, c.z); scene.add(anchor);
+    const lbl = addLabel(anchor, '🪜', 'stairlbl'); lbl.element.title = e0.name || 'Escalera';
+    stairMarkers.push(lbl);
+  }
+}
+function setStairMarkers(on) { document.body.classList.toggle('stairs-on', !!on); }
 
 /* =====================================================================
    4. ARQUITECTURA POR ESTILO (coordenadas locales del edificio, en px)
@@ -991,5 +1023,5 @@ if (qs.get('dest') && placeObjs[qs.get('dest')]) { selectPlace(qs.get('dest'), f
 resetIdle();
 animate();
 // depuración: window.campus.view(target, position) dibuja un cuadro aunque la pestaña esté en segundo plano
-window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour,
+window.campus = { G, C, TER, placeObjs, routeTo, setOrigin, openTour, setStairMarkers, stairMarkers,
   view(t, p) { if (t) controls.target.set(...t); if (p) camera.position.set(...p); tween.active = false; controls.update(); renderer.render(scene, camera); labelRenderer.render(scene, camera); return renderer.domElement.toDataURL('image/jpeg', 0.8); } };

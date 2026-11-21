@@ -25,6 +25,10 @@ function polyInfo(poly, x, y) {
 export function makeTerrain(C) {
   const T = C.TERRAIN;
   const [H0, H1, H2] = T.heights;
+  // Plataformas (terrazas construidas): dentro del polígono la cota pasa a ser h, con un borde de EDGE px
+  const EDGE = 7;
+  const plats = (T.platforms || []).map(p => ({ ...p, poly: geo.rectPoly(p.rect[0], p.rect[1], p.rect[2], p.rect[3], p.rot ?? C.ROT) }));
+  const edgeDist = (poly, x, y) => { let d = Infinity; for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; d = Math.min(d, geo.segDist(x, y, a[0], a[1], b[0], b[1]).d); } return d; };
 
   /** 0 = Av. España … 1 = Av. Los Placeres (negativo = lado del mar) */
   function sAt(x, y) {
@@ -33,12 +37,17 @@ export function makeTerrain(C) {
     if (p.side > 0) return 1;               // al otro lado de Los Placeres (cerro)
     return e.d / (e.d + p.d);
   }
-  function heightAt(x, y) {
+  function baseHeight(x, y) {
     const s = sAt(x, y);
     if (s < 0) return -s > T.coast ? -0.8 : H0 - smooth(T.coast - 12, T.coast, -s) * (H0 + 0.8);
     return H0
       + (H1 - H0) * smooth(T.low.c - T.low.w / 2, T.low.c + T.low.w / 2, s)
       + (H2 - H1) * smooth(T.high.c - T.high.w / 2, T.high.c + T.high.w / 2, s);
+  }
+  function heightAt(x, y) {
+    let h = baseHeight(x, y);
+    for (const p of plats) if (geo.inPoly(x, y, p.poly)) { const t = smooth(0, EDGE, edgeDist(p.poly, x, y)); h += (p.h - h) * t; }
+    return h;
   }
   /** Terraza: 0 baja (Av. España) · 1 media · 2 alta (Los Placeres) */
   function levelAt(x, y) { const s = sAt(x, y); return s < T.low.c ? 0 : s < T.high.c ? 1 : 2; }

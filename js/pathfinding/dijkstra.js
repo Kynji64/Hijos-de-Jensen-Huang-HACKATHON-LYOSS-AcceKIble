@@ -96,7 +96,7 @@ export function buildGraph(C, terrain) {
             let type = L.type;
             if (L.kind === 'path' && type === 'p' && horiz > 2.5 && dh / horiz > MAX_GRADE) type = 's';   // bordillos cortos no cuentan
             const len = Math.hypot(horiz, dh);
-            const e = { a, b, type, kind: L.kind, ext: !!L.ext, street: L.street || null, name: L.name, width: L.width, len, m: len * C.M_PER_UNIT, dh };
+            const e = { a, b, type, hasStairs: type === 's', kind: L.kind, ext: !!L.ext, street: L.street || null, name: L.name, width: L.width, len, m: len * C.M_PER_UNIT, dh };
             G.edges.push(e); G.adj[a].push({ to: b, e }); G.adj[b].push({ to: a, e });
           }
           a = b;
@@ -133,9 +133,9 @@ export function dijkstra(G, src, accessible, allowExt = false) {
     if (done.has(u)) continue;
     done.add(u);
     for (const { to, e } of G.adj[u]) {
-      if (accessible && e.type === 's') continue;
+      if (accessible && e.hasStairs) continue;                 // costo infinito: la ruta accesible no usa escaleras
       if (accessible && e.ext && !allowExt) continue;
-      const alt = d + e.len * (e.ext ? EXT_FACTOR : 1) + (e.type === 's' ? STAIR_PENALTY : 0);
+      const alt = d + e.len * (e.ext ? EXT_FACTOR : 1) + (e.hasStairs ? STAIR_PENALTY : 0);
       if (alt < dist[to]) { dist[to] = alt; prev[to] = u; prevE[to] = e; push([alt, to]); }
     }
   }
@@ -153,7 +153,7 @@ export function computeRoute(G, place, totemId, accessible) {
   const meters = edges.reduce((s, e) => s + e.m, 0);
   // tramos de escalera contiguos = una sola escalera
   let stairs = 0, ramps = 0;
-  edges.forEach((e, i) => { if (e.type === 's' && edges[i - 1]?.type !== 's') stairs++; if (e.type === 'r' && edges[i - 1]?.type !== 'r') ramps++; });
+  edges.forEach((e, i) => { if (e.hasStairs && !edges[i - 1]?.hasStairs) stairs++; if (e.type === 'r' && edges[i - 1]?.type !== 'r') ramps++; });
   const seconds = meters / (accessible ? WALK_SPEED_ACC : WALK_SPEED) + stairs * STAIR_EXTRA_S;
   const external = edges.some(e => e.ext);
   return { nodes, edges, meters, stairs, ramps, external, accessible, placeId: place.id, totemId, minutes: Math.max(1, Math.round(seconds / 60)) };
@@ -185,11 +185,14 @@ export function buildSteps(G, C, route) {
     const toLvl = lvl(G.nodes[g.to].level);
     if (g.mode === 's') {
       const n = Math.max(3, Math.round(rise / 0.17));
-      steps.push({ icon: '🪜', cls: 'warn', text: `${up ? 'Sube' : 'Baja'} ${g.via && g.via.includes('escalinata') ? g.via : 'la escalera'} (≈${n} peldaños) hasta ${toLvl}.` });
+      const name = !g.via ? 'la escalera'
+        : /escal|grada/i.test(g.via) ? g.via
+        : `la escalera ${g.via.startsWith('el ') ? 'del ' + g.via.slice(3) : 'de ' + g.via}`;
+      steps.push({ icon: '🪜', cls: 'warn', text: `${up ? 'Sube' : 'Baja'} por ${name} (≈${n} peldaños).` });
     } else if (g.mode === 'r') {
       steps.push({ icon: '♿', cls: 'ramp', text: `${up ? 'Sube' : 'Baja'} por ${g.via || 'la rampa'} (sin escalones).` });
     } else {
-      const via = g.via ? ` por ${g.via}${g.ext ? ' (calle exterior)' : ''}` : '';
+      const via = g.via && !/escal|grada|rampa/i.test(g.via) ? ` por ${g.via}${g.ext ? ' (calle exterior)' : ''}` : '';
       const slope = rise > 3 ? (up ? ' (en subida)' : ' (en bajada)') : '';
       if (g.m >= 6) steps.push({ icon: '🚶', text: `Camina ${Math.round(g.m)} m${via}${slope}.` });
     }

@@ -53,6 +53,12 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 - **Tour 360° USM:** botón en la tarjeta de cada lugar y de la ruta. Embebe el visor oficial (`/recorridos/campus-casacentral/`, ya que la página pública bloquea iframes) y ofrece abrirlo en una pestaña nueva.
 - `js/map.js`, `css/map.css` y `data/buildings.geojson` son un prototipo aparte con MapLibre y no los carga `index.html`.
 
+## Escaleras y grafo (para la ruta accesible)
+
+- Las escaleras reales del plano oficial están en `PATHS` (`type: 's'`) y en los bordes de las terrazas de `TERRAIN.platforms` (casco histórico, Patio de los Ceibos, Edificio R): un sendero que cruza un desnivel con pendiente > 14 % se marca solo como escalera.
+- Cada arista del grafo trae `hasStairs: true | false` (las calles internas y las rampas `type: 'r'` son `false`). `computeRoute(G, lugar, tótem, true)` ya bloquea las aristas con `hasStairs` y las calles exteriores (salvo destinos fuera del recinto).
+- `window.campus.setStairMarkers(true)` muestra un ícono 🪜 sobre cada escalera (pensado para la vista de accesibilidad).
+
 ## Licencia
 
 Distribuido bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.
