@@ -1,9 +1,9 @@
 import 'package:material_ui/material_ui.dart';
 import 'main.dart' show Mapa3D;
 
-// ─────────────────────────────────────────────────────────────
-// Datos simulados (para la demo). Más adelante pueden venir de un JSON.
-// ─────────────────────────────────────────────────────────────
+// ────────────────────────────────
+// datos hardcodeados para la demo.
+// ────────────────────────────────
 
 class Aviso {
   final String titulo;
@@ -12,11 +12,16 @@ class Aviso {
   const Aviso(this.titulo, this.detalle, this.icono);
 }
 
+const lunesAViernes = [1, 2, 3, 4, 5];
+const lunesASabado = [1, 2, 3, 4, 5, 6];
+const todosLosDias = [1, 2, 3, 4, 5, 6, 7];
+
 class Servicio {
   final String nombre;
   final double abre; // 8.5 = 08:30
   final double cierra; // 21.0 = 21:00
-  const Servicio(this.nombre, this.abre, this.cierra);
+  final List<int> dias;
+  const Servicio(this.nombre, this.abre, this.cierra, {this.dias = lunesAViernes});
 }
 
 class Pregunta {
@@ -35,14 +40,14 @@ const avisos = [
   Aviso('Baño del Edificio A fuera de servicio por Mantenimiento',
       'En mantención hasta el 25/11. Por favor prioriza otra opción. Gracias.',
       Icons.elevator_outlined),
-  //Aviso('Obras frente al Edificio D',
+  //Aviso('Obras frente al Edificio A',
   //    'Paso cerrado por Av. España. Desvío señalizado por el patio central.',
   //|    Icons.construction),
 ];
 
 const servicios = [
   Servicio('Biblioteca', 8, 20),
-  Servicio('Casino USM', 8, 14),
+  Servicio('Casino USM', 8, 14, dias: lunesASabado),
   Servicio('Kiosco Patio Central', 9.5, 19),
   Servicio('Sansanito', 8.5, 21),
   Servicio('Gimnasio USM', 9, 21),
@@ -50,7 +55,7 @@ const servicios = [
 
 const preguntas = [
   Pregunta('¿Dónde puedo imprimir?',
-      'Dentro del Campus puedes ir a la sala C2xx y encontraras donde imprimir y utiles de papeleria'),
+      'Dentro del Campus puedes ir a la sala C224 y encontraras donde imprimir y utiles de papeleria'),
   Pregunta('¿Cual es el horario de la Universidad?',
       'El horario de Lunes a Viernes de 7:30 hasta 22:00'),
   Pregunta('¿Cómo pido apoyo si tengo movilidad reducida?',
@@ -67,9 +72,9 @@ const contactos = [
   Contacto('Sansanito 2', '+569 7334 4188')
 ];
 
-// ─────────────────────────────────────────────────────────────
-// Panel derecho con información complementaria al mapa
-// ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────
+// ventana al borde derecho con la info
+// ─────────────────────────────────────────────────────
 
 class PanelInfo extends StatelessWidget {
   final bool modoAccesible;
@@ -100,12 +105,10 @@ class PanelInfo extends StatelessWidget {
                 for (final a in avisos) _TarjetaAviso(aviso: a),
                 const SizedBox(height: 20),
 
-                // ── Abierto ahora ──
-                const _Titulo(icono: Icons.schedule, texto: 'Abierto ahora'),
-                for (final s in servicios) _FilaServicio(servicio: s, hora: horaActual),
+                const _Titulo(icono: Icons.schedule, texto: 'Horarios de Servicios'),
+                for (final s in servicios) _FilaServicio(servicio: s, ahora: ahora),
                 const SizedBox(height: 20),
 
-                // ── Preguntas frecuentes ──
                 const _Titulo(icono: Icons.help_outline, texto: 'Preguntas frecuentes'),
                 for (final p in preguntas)
                   ExpansionTile(
@@ -129,7 +132,6 @@ class PanelInfo extends StatelessWidget {
             ),
           ),
 
-          // ── Botón de ayuda fijo abajo ──
           Padding(
             padding: const EdgeInsets.all(16),
             child: SizedBox(
@@ -185,9 +187,6 @@ class PanelInfo extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────
-// Piezas pequeñas del panel
-// ─────────────────────────────────────────────────────────────
 
 class _Titulo extends StatelessWidget {
   final IconData icono;
@@ -249,8 +248,10 @@ class _TarjetaAviso extends StatelessWidget {
 
 class _FilaServicio extends StatelessWidget {
   final Servicio servicio;
-  final double hora;
-  const _FilaServicio({required this.servicio, required this.hora});
+  final DateTime ahora;
+  const _FilaServicio({required this.servicio, required this.ahora});
+
+  static const _nombresDias = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
   String _formato(double h) {
     final hh = h.floor().toString().padLeft(2, '0');
@@ -258,21 +259,37 @@ class _FilaServicio extends StatelessWidget {
     return '$hh:$mm';
   }
 
+  String _proximaApertura(double hora) {
+    final hoy = ahora.weekday;
+    final horaAbre = _formato(servicio.abre);
+    if (servicio.dias.contains(hoy) && hora < servicio.abre) {
+      return 'abre hoy $horaAbre';
+    }
+    for (var d = 1; d <= 7; d++) {
+      final dia = ((hoy - 1 + d) % 7) + 1;
+      if (servicio.dias.contains(dia)) {
+        return d == 1 ? 'abre mañana $horaAbre' : 'abre ${_nombresDias[dia]} $horaAbre';
+      }
+    }
+    return 'sin horario';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final abierto = hora >= servicio.abre && hora < servicio.cierra;
+    final hora = ahora.hour + ahora.minute / 60;
+    final abierto = servicio.dias.contains(ahora.weekday) &&
+        hora >= servicio.abre &&
+        hora < servicio.cierra;
     final color = abierto ? const Color(0xFF1E7A46) : const Color(0xFFC62828);
     final estado = abierto
         ? 'Abierto · cierra ${_formato(servicio.cierra)}'
-        : 'Cerrado · abre ${_formato(servicio.abre)}';
+        : 'Cerrado · ${_proximaApertura(hora)}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Expanded(
-            child: Text(servicio.nombre, style: const TextStyle(fontSize: 16)),
-          ),
+          Expanded(child: Text(servicio.nombre, style: const TextStyle(fontSize: 16))),
           Container(
             width: 10,
             height: 10,

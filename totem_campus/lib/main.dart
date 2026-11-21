@@ -6,8 +6,7 @@ import 'package:web/web.dart' as web;
 import 'panel_info.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Rutas de los dos mapas (dentro de la carpeta web/).
-// Cuando sus compañeros entreguen los mapas, solo cambien estas dos líneas.
+// Rutas de los dos mapas.
 // ─────────────────────────────────────────────────────────────
 const String rutaMapaGeneral = 'mapa/index.html';
 const String rutaMapaAccesible = 'mapa_accesible/index.html';
@@ -40,12 +39,10 @@ class PantallaPrincipal extends StatefulWidget {
 }
 
 class _PantallaPrincipalState extends State<PantallaPrincipal> {
-  // Ancho del panel derecho (se cambia arrastrando la barrita del medio)
   double _anchoPanel = 380;
   static const double _anchoMin = 280;
   static const double _anchoMax = 600;
 
-  // Modo del mapa: false = general, true = movilidad reducida
   bool _modoAccesible = false;
 
   void _cambiarModo(bool accesible) {
@@ -82,7 +79,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               ),
             ),
 
-            // ── Barrita para cambiar el tamaño del panel ──
+            // Barrita para cambiar el tamaño del panel
             MouseRegion(
               cursor: SystemMouseCursors.resizeColumn,
               child: GestureDetector(
@@ -111,7 +108,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
               ),
             ),
 
-            // ── Columna derecha: selector de modo + panel de info ──
+            // la columna derecha
             SizedBox(
               width: _anchoPanel,
               child: Column(
@@ -135,7 +132,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
   }
 }
 
-/// Dos botones grandes para elegir el tipo de mapa.
+/// TIPO de MAPA
 class SelectorModo extends StatelessWidget {
   final bool accesible;
   final ValueChanged<bool> onCambio;
@@ -209,20 +206,20 @@ class _BotonModo extends StatelessWidget {
   }
 }
 
-/// Muestra un mapa HTML de la carpeta web/ dentro de la app (solo funciona en web).
+/// MAPA DEL HTML CHAVALIN
 class Mapa3D extends StatelessWidget {
   const Mapa3D({super.key});
 
   static bool _registrado = false;
   static web.HTMLIFrameElement? _iframe;
 
-  /// Cambia el mapa que se muestra (por ejemplo, al de movilidad reducida).
+  /// camnio del mapa
   static void cargar(String ruta) {
     _iframe?.src = ruta;
   }
 
-  /// Mientras se arrastra la barrita o hay un diálogo abierto,
-  /// el iframe no debe "robarse" el mouse.
+  
+  /// en NECESITO AYUDA, bloquea el fondo !!!!!!
   static void bloquearEventos(bool bloquear) {
     _iframe?.style.setProperty('pointer-events', bloquear ? 'none' : 'auto');
   }
