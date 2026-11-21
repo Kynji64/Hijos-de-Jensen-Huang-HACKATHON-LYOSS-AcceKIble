@@ -53,6 +53,33 @@ Toda la información geográfica y topológica se encuentra en `js/data/campus-d
 - **Tour 360° USM:** botón en la tarjeta de cada lugar y de la ruta. Embebe el visor oficial (`/recorridos/campus-casacentral/`, ya que la página pública bloquea iframes) y ofrece abrirlo en una pestaña nueva.
 - `js/map.js`, `css/map.css` y `data/buildings.geojson` son un prototipo aparte con MapLibre y no los carga `index.html`.
 
+## Escaleras y grafo (para la ruta accesible)
+
+- Las escaleras reales del plano oficial están en `PATHS` (`type: 's'`) y en los bordes de las terrazas de `TERRAIN.platforms` (casco histórico, Patio de los Ceibos, Edificio R): un sendero que cruza un desnivel con pendiente > 14 % se marca solo como escalera.
+- Cada arista del grafo trae `hasStairs: true | false` (las calles internas y las rampas `type: 'r'` son `false`). `computeRoute(G, lugar, tótem, true)` ya bloquea las aristas con `hasStairs` y las calles exteriores (salvo destinos fuera del recinto).
+- `window.campus.setStairMarkers(true)` muestra un ícono 🪜 sobre cada escalera (pensado para la vista de accesibilidad).
+
+## Guía por voz (visión reducida)
+
+- Botón **🔊 Voz** en la barra derecha (bajo *A+ Texto*): usa la Web Speech API del navegador (`speechSynthesis`, voz en español, `rate 0.95`), sin servicios externos.
+- Con la guía activa se anuncia el tótem actual, el lugar tocado en el mapa (nombre, descripción y referencia), cada ruta trazada o recalculada (distancia, tiempo, escaleras y pasos numerados con dirección y giros) y los cambios de tótem.
+- Tocarlo mientras habla detiene la locución; tocarlo en silencio desactiva la guía. Se apaga sola por inactividad.
+- **🔁 Repetir** en la tarjeta de ruta vuelve a leer el recorrido (aunque la guía esté apagada).
+- Para el equipo: `window.campus.voice.speak(texto)` y `window.campus.voice.announceAccessible(true|false)` (confirmación por voz de la ruta accesible).
+
+## Modo alto contraste (baja visión)
+
+- Botón **◐ Contraste** en la barra derecha (bajo *Voz*). Activo: amarillo `#FFFF00` con texto negro y borde grueso; `aria-pressed` y `aria-label` cambian con el estado. Si la guía por voz está activa, anuncia el cambio.
+- Interfaz (`body.high-contrast` en `css/styles.css`): fondos negros, bordes de 2–3 px amarillo/blanco, texto blanco, seleccionados invertidos y foco cian, sin sombras.
+- Escena 3D (`setHighContrast` en `js/main.js`): cielo y terreno negro mate, casas y árboles atenuados, edificios del campus en blanco con techos grises y aristas negras, calles internas claras con borde amarillo, escaleras en naranja/rojo y ruta en amarillo eléctrico más gruesa. Al desactivarlo se restauran los materiales originales. Se apaga solo por inactividad.
+
+## Rama `mapa-movilidad-reducida` (mapa accesible del tótem)
+
+- Es el mapa que Flutter carga en el modo *Movilidad reducida* (`totem_campus/web/mapa_accesible/`).
+- `MOVILIDAD_REDUCIDA = true` en `js/main.js`: todas las rutas son la **ruta óptima sin escaleras** (Dijkstra con las aristas `hasStairs` bloqueadas y solo red interna, salvo destinos fuera del recinto). Las 84 combinaciones tótem → destino tienen ruta sin escalones.
+- La tarjeta muestra cuántas escaleras se evitaron y cuántos metros extra suma; las escaleras se ven atenuadas y con ícono 🪜; paleta celeste.
+- Incluye la guía por voz y el alto contraste. Mantener esta rama al día haciendo `git merge origin/mapa-interactivo` (no copiar archivos sueltos: mezclar versiones fue lo que hacía caer el mapa).
+
 ## Licencia
 
 Distribuido bajo la licencia **GNU General Public License v3.0**. Consulta el archivo `LICENSE` para más detalles.

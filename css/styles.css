@@ -145,7 +145,10 @@ body.acc .rc-stats b{color:#5eead4}
 .tour-loading{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:20px;color:var(--muted);z-index:1;pointer-events:none}
 
 /* ---------- Controles de mapa y leyenda ---------- */
-#mapCtrls{position:fixed;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px;z-index:14}
+#mapCtrls{position:fixed;right:12px;top:88px;bottom:12px;display:flex;flex-direction:column;justify-content:center;gap:8px;z-index:14;pointer-events:none}
+#mapCtrls button{pointer-events:auto}
+@media (max-height:860px) and (min-width:861px){#mapCtrls{gap:6px}#mapCtrls button{width:54px;height:54px;font-size:1.15rem}}
+@media (max-height:700px) and (min-width:861px){#mapCtrls{gap:5px}#mapCtrls button{width:48px;height:48px;font-size:1rem}#mapCtrls button small{font-size:.5rem}}
 #mapCtrls button{width:62px;height:62px;border-radius:16px;background:var(--panel);font-size:1.35rem;font-weight:800;box-shadow:0 6px 18px rgba(11,37,69,.25)}
 #mapCtrls button.on{background:var(--yellow);color:var(--navy)}
 #mapCtrls button small{display:block;font-size:.58rem;font-weight:600;margin-top:2px}
@@ -217,3 +220,54 @@ body.stairs-on .stairlbl{display:block}
 /* Etiqueta 3D seleccionada */
 .lbl { background: rgba(0, 79, 104, 0.92); }
 .lbl.sel { background: #009EC4; }
+
+/* =====================================================================
+   MODO ALTO CONTRASTE (body.high-contrast) · objetivo WCAG AAA
+   Fondos negros, bordes gruesos amarillo/blanco, texto blanco puro,
+   seleccionado invertido (amarillo + negro), sin sombras ni degradados.
+   ===================================================================== */
+body.high-contrast{--panel:#000;--navy:#000;--navy2:#000;--navy3:#000;--yellow:#FFFF00;--red:#FF4040;--teal:#00FFFF;--muted:#FFFFFF;--line:#FFFFFF;--text:#FFFFFF;background:#0a0a0a}
+body.high-contrast *{box-shadow:none!important;text-shadow:none!important}
+body.high-contrast #topbar,body.high-contrast #panel,body.high-contrast .card,body.high-contrast .modal-box,body.high-contrast #panelToggle,body.high-contrast #toast{background:#000;border:3px solid #FFFF00;color:#fff}
+body.high-contrast .sec{border-color:#fff}
+body.high-contrast .logo,body.high-contrast .num{background:#FFFF00;color:#000}
+body.high-contrast .here{background:#000;border:2px solid #fff}
+body.high-contrast .totem-btn,body.high-contrast .switch-row,body.high-contrast .dest,body.high-contrast .letters button,body.high-contrast .chip,
+body.high-contrast .rc-stats div,body.high-contrast .rc-actions button,body.high-contrast .ghost,body.high-contrast .x{background:#000;color:#fff;border:2px solid #fff}
+body.high-contrast .totem-btn b{background:#000;border:2px solid #fff;color:#fff}
+body.high-contrast .totem-btn small,body.high-contrast .dest .t small,body.high-contrast .ic-cat,body.high-contrast .rc-title small,body.high-contrast .rc-stats small{color:#fff}
+body.high-contrast .totem-btn.active,body.high-contrast .dest.sel,body.high-contrast .letters button.sel,body.high-contrast .rc-actions button.on,body.high-contrast .switch-row.on{background:#FFFF00;color:#000;border:3px solid #fff}
+body.high-contrast .totem-btn.active b{background:#000;color:#FFFF00;border-color:#000}
+body.high-contrast .totem-btn.active small,body.high-contrast .dest.sel .t small{color:#000}
+body.high-contrast .letters button{box-shadow:none}
+body.high-contrast .search{background:#000;border:3px solid #fff}
+body.high-contrast .search input{color:#fff}
+body.high-contrast .search input::placeholder{color:#FFFF00;opacity:1}
+body.high-contrast .search button{color:#fff}
+body.high-contrast .dest .go{color:#FFFF00}
+body.high-contrast .primary{background:#FFFF00;color:#000;border:3px solid #fff}
+body.high-contrast .tour-btn{background:#fff;color:#000;border:3px solid #FFFF00}
+body.high-contrast .tour-ext{background:#FFFF00;color:#000;border:3px solid #fff}
+body.high-contrast .rc-stats b,body.high-contrast .rc-title b,body.high-contrast .ic-head h3,body.high-contrast .sec h2{color:#FFFF00}
+body.high-contrast .rc-note{background:#000;color:#fff}
+body.high-contrast .rc-note.warn{border:2px solid #FF9900}
+body.high-contrast .rc-note.ok{border:2px solid #00FF66}
+body.high-contrast .rc-list li{border-color:#fff}
+body.high-contrast .rc-list li i{background:#000;border:2px solid #fff}
+body.high-contrast .rc-list li.warn i{border-color:#FF9900}
+body.high-contrast #mapCtrls button{background:#000;color:#fff;border:3px solid #fff}
+body.high-contrast #mapCtrls button.on{background:#FFFF00;color:#000;border:3px solid #fff}
+body.high-contrast #contrastBtn.on{background:#FFFF00;color:#000;border:4px solid #000;outline:3px solid #fff}
+body.high-contrast .lbl{background:#000;color:#fff;border:2px solid #FFFF00}
+body.high-contrast .lbl .n em{color:#FFFF00}
+body.high-contrast .lbl .b{border:2px solid #fff}
+body.high-contrast .lbl.sel{background:#FFFF00;color:#000;border-color:#fff}
+body.high-contrast .lbl.sel .n em{color:#000}
+body.high-contrast .lbl.dest{border-color:#FF4040}
+body.high-contrast .tlbl{background:#FFFF00;color:#000;border:2px solid #000}
+body.high-contrast .tlbl.here{background:#FF4040;color:#fff;border:2px solid #fff}
+body.high-contrast .street,body.high-contrast .street.sea{color:#fff}
+body.high-contrast .stairlbl{background:#FF6A00;border-color:#fff}
+body.high-contrast .modal{background:rgba(0,0,0,.92)}
+body.high-contrast :focus-visible{outline:4px solid #00FFFF!important;outline-offset:2px}
+#contrastBtn.on{background:#FFFF00;color:#000}
